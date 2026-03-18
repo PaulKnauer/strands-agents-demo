@@ -1,8 +1,10 @@
 """AgentCore Runtime entrypoint — age-in-days agent via Bedrock Converse API.
 
-Uses boto3 directly (pre-installed in the AgentCore PYTHON_3_12 runtime) rather than
-strands-agents, which is not pre-installed and cannot be pip-installed within AgentCore's
-30-second HTTP-server startup window. agent.py (local REPL) still uses strands-agents.
+Uses boto3 directly rather than strands-agents, which cannot be pip-installed within
+AgentCore's 30-second HTTP-server startup window. boto3 is bundled in the deployment
+ZIP via bedrock-agentcore's transitive dependency — it is NOT reliably pre-installed
+in the AgentCore PYTHON_3_12 runtime despite documentation suggesting otherwise.
+agent.py (local REPL) still uses strands-agents.
 AgentCore traces every tool call automatically — no custom logging code required.
 """
 

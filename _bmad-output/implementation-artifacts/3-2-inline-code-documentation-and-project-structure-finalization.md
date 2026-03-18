@@ -18,7 +18,7 @@ So that I can understand the entire project within 5 minutes and confidently for
 
 4. **Given** I run `black agent.py` and `black deploy/deploy.py`, **When** black completes, **Then** it reports no changes — all files are PEP 8 compliant.
 
-5. **Given** a developer wants to fork this project for a different use case, **When** they modify only `agent.py` (changing the tool and SYSTEM_PROMPT) and update `.env`, **Then** the rest of the project (deployment script, VS Code config, requirements) works without modification.
+5. **Given** a developer wants to fork this project for a different use case, **When** they update the agent-specific surfaces in `agent.py` (the `@tool` and `SYSTEM_PROMPT`) and mirror those changes in `deploy/app.py` (the `TOOLS` list, tool handler, and `SYSTEM_PROMPT`), and update `.env`, **Then** all deployment scaffolding, VS Code config, Makefile, and requirements work without modification. *(Note: the two-file update is a deployment constraint, not an architectural preference — see README §Why are there two Python files.)*
 
 ## Tasks / Subtasks
 

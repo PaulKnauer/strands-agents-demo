@@ -51,18 +51,22 @@ def _ensure_s3_bucket(s3, bucket_name: str, region: str, account_id: str) -> Non
 
 
 def _build_deployment_zip(project_root: str) -> bytes:
-    """Create an in-memory ZIP with agent.py, app.py, and pre-bundled dependencies.
+    """Create an in-memory ZIP with app.py and pre-bundled dependencies.
 
-    Dependencies are resolved and downloaded for the linux/x86_64 (manylinux2014)
-    platform at deploy-time using pip's cross-platform wheel support, then bundled
-    into the zip.  The PYTHON_3_12 runtime extracts the zip to /var/task/ (in
-    sys.path), so root-level packages are importable without sys.path changes.
+    agent.py is intentionally excluded — it imports strands-agents (not present in
+    the runtime) and is local-REPL only. app.py is the cloud entrypoint.
+
+    Dependencies (including boto3 via bedrock-agentcore's transitive deps) are
+    resolved and downloaded for the linux/x86_64 (manylinux2014) platform at
+    deploy-time using pip's cross-platform wheel support, then bundled into the zip.
+    boto3 must be bundled — it is NOT reliably pre-installed in PYTHON_3_12 despite
+    documentation suggesting otherwise (confirmed during deployment testing).
+
+    The PYTHON_3_12 runtime extracts the zip to /var/task/ (in sys.path), so
+    root-level packages are importable without sys.path changes.
 
     Using Linux wheels at build-time means Rust/C extensions (e.g. pydantic-core)
     are compatible with the runtime — macOS dylibs would crash on startup.
-
-    The boto3/botocore stack is excluded because it is pre-installed in the runtime;
-    bundling it would waste ~20 MB and add no value.
     """
     buf = io.BytesIO()
     with tempfile.TemporaryDirectory() as pkg_dir:
