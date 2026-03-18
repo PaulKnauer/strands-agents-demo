@@ -1,113 +1,332 @@
 # strands-agents-demo
 
-A demonstration project for building AI agents using the [Strands Agents SDK](https://strandsagents.com), scaffolded and orchestrated with the [BMAD Framework](https://github.com/bmad-agents/bmad-method) (Built-in Multi-Agent Design).
+A minimal, forkable reference implementation of an AI agent built with the [Strands Agents SDK](https://strandsagents.com) and deployed to [AWS AgentCore](https://aws.amazon.com/bedrock/agentcore/). The agent calculates a person's age in days from their date of birth — a deliberately simple use case that keeps the focus on the framework patterns, not the business logic.
+
+## What This Demonstrates
+
+| Pattern | Where |
+|---------|-------|
+| `@tool` decorator — defining a custom tool the LLM can call | `agent.py` |
+| Model provider switching via env vars (Bedrock ↔ Gemini, no code change) | `agent.py`, `.env.example` |
+| Conversational REPL loop with Strands `Agent()` | `agent.py` |
+| One-command AgentCore deployment with IAM provisioning | `deploy/deploy.py` |
+| Automatic tool-call observability — zero custom logging code | AgentCore console |
+| Single-file agent that can be forked by changing one file | `agent.py` |
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Local Setup](#local-setup)
+- [VS Code Debugging](#vs-code-debugging)
+- [AgentCore Deployment](#agentcore-deployment)
 - [Project Structure](#project-structure)
-- [BMAD Agent Team](#bmad-agent-team)
-- [Getting Started](#getting-started)
-- [Workflows](#workflows)
+- [How It Works](#how-it-works)
+- [Make Targets](#make-targets)
+- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
-## Overview
+---
 
-This project combines two agent frameworks:
+## Prerequisites
 
-- **Strands Agents SDK** — AWS's Python framework for building production-ready AI agents with tools, memory, and multi-agent orchestration.
-- **BMAD Framework (v6.2.0)** — A structured multi-agent development methodology that guides projects through analysis, planning, solutioning, and implementation phases using specialized AI agents.
+**Required for local run:**
 
-The BMAD agents guide and accelerate the development of Strands-based agent applications through defined roles, workflows, and artifacts.
+- Python 3.11+ ([download](https://www.python.org/downloads/))
+- AWS account with Amazon Bedrock enabled
+- Bedrock model access granted for **`anthropic.claude-3-haiku-20240307-v1:0`** in `us-east-1`
+  _(Console → Amazon Bedrock → Model access → Request access)_
+- AWS credentials configured — either `aws configure` (CLI) or environment variables:
+  ```bash
+  export AWS_ACCESS_KEY_ID=...
+  export AWS_SECRET_ACCESS_KEY=...
+  ```
+
+**Additional requirements for AgentCore deployment:**
+
+- AWS CLI installed and configured
+- IAM user/role with these permissions:
+  - `bedrock-agentcore-control:*`
+  - `s3:CreateBucket`, `s3:PutObject`, `s3:HeadBucket`, `s3:PutEncryptionConfiguration`
+  - `iam:CreateRole`, `iam:GetRole`, `iam:PutRolePolicy`
+  - `sts:GetCallerIdentity`
+
+**Optional (Gemini fallback only):**
+
+- Google AI Studio API key ([get one free](https://aistudio.google.com/apikey))
+
+---
+
+## Local Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/PaulKnauer/strands-agents-demo.git
+cd strands-agents-demo
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate          # macOS / Linux
+# venv\Scripts\activate           # Windows
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
+cp .env.example .env
+```
+
+> ⚠️ **NEVER commit `.env` to version control.** It contains credentials. `.env` is already in `.gitignore` — keep it that way.
+
+Edit `.env` and fill in your values:
+
+```bash
+MODEL_PROVIDER=bedrock
+MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+AWS_REGION=us-east-1
+AGENT_NAME=age-in-days-demo
+```
+
+```bash
+# 5. Run the agent
+python agent.py
+```
+
+**Example interaction:**
+
+```
+Age-in-Days Agent (type 'exit' to quit)
+
+You: I was born on 14th March 1990
+
+Agent: You were born 13,149 days ago! That's quite a journey — you've
+       lived through some remarkable decades. 🎂
+
+You: exit
+```
+
+**Shortcut:** `make install && make run`
+
+---
+
+## VS Code Debugging
+
+Press **F5** — the included `.vscode/launch.json` launches `agent.py` with the debugger attached and `.env` loaded automatically. No manual `export` required.
+
+To verify: set a breakpoint inside `get_today_date()`, press F5, type a date of birth, and execution will pause at the breakpoint.
+
+---
+
+## AgentCore Deployment
+
+AgentCore runs the agent as a managed cloud runtime with automatic tool-call tracing. The deployment script provisions all AWS infrastructure — no console steps required.
+
+**Step 1:** Confirm local agent works first (complete [Local Setup](#local-setup)).
+
+**Step 2:** Deploy:
+
+```bash
+python deploy/deploy.py
+# or: make deploy
+```
+
+The script runs 5 steps and prints the endpoint URL on completion:
+
+```
+🚀 Deploying agent 'age_in_days_demo' to AgentCore in us-east-1...
+
+Step 1/5: Ensuring S3 bucket...
+  Created S3 bucket: bedrock-agentcore-code-123456789012-us-east-1
+Step 2/5: Packaging and uploading agent code...
+  Uploaded 4,231,847 bytes → s3://...
+Step 3/5: Ensuring IAM execution role...
+  Created IAM role: AmazonBedrockAgentCoreRuntime_age_in_days_demo
+Step 4/5: Deploying AgentCore runtime (idempotent)...
+  Creating new AgentCore runtime 'age_in_days_demo'...
+Step 5/5: Waiting for runtime to be ready...
+  Waiting for agent to be ready ........... ✅
+
+🎉 Agent deployed successfully!
+   Endpoint URL: https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/.../invocations
+```
+
+**Step 3:** Verify the deployed agent responds:
+
+```bash
+python deploy/verify.py
+# or: make verify
+```
+
+Expected output:
+
+```
+Verifying deployed agent 'age_in_days_demo' in us-east-1...
+  Runtime ARN: arn:aws:bedrock-agentcore:...
+  Test prompt: "I was born on 14th March 1990"
+
+Agent responded (in 3.2s):
+
+You were born 13,149 days ago! ...
+
+Verification complete.
+Next: open the AgentCore console to confirm get_today_date tool traces are visible.
+```
+
+**Step 4:** View tool traces in the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/) → your agent → Invocation history. Every `get_today_date` call is traced with its input and output — no logging code written.
+
+**Teardown** (when done):
+
+```bash
+python deploy/teardown.py
+# or: make teardown
+```
+
+---
 
 ## Project Structure
 
-```text
+```
 strands-agents-demo/
-├── _bmad/                    # BMAD framework core (source of truth)
-│   ├── _config/              # Agent, skill, workflow, and tool manifests
-│   ├── _memory/              # Persistent agent memory and documentation standards
-│   ├── core/                 # Built-in skills: brainstorming, research, editing
-│   ├── bmm/                  # Agent Management Module: agents and workflows
-│   ├── bmb/                  # Builder Module: agent and workflow builders
-│   └── tea/                  # Test Architecture Enterprise: QA and testing
-├── _bmad-output/             # Generated project artifacts
-│   ├── planning-artifacts/   # PRDs, architecture docs, UX specs
-│   ├── implementation-artifacts/ # Code, stories, implementation notes
-│   └── test-artifacts/       # Test plans and results
-├── .claude/skills/           # Claude Code IDE skill integrations (synced from _bmad)
-├── .cursor/skills/           # Cursor IDE skill integrations (synced from _bmad)
-├── .agents/skills/           # Generic agent skill integrations (synced from _bmad)
-├── docs/                     # Project documentation
-└── README.md
+│
+├── agent.py              # The agent — @tool, model config, Agent(), REPL loop
+│                         # < 150 lines; local development only (Strands SDK)
+│
+├── requirements.txt      # Pinned dependencies
+│
+├── .env.example          # Environment variable template — copy to .env
+│
+├── deploy/
+│   ├── app.py            # Cloud runtime entrypoint (boto3 direct, no Strands SDK)
+│   ├── deploy.py         # Provisions S3, IAM role, AgentCore runtime (idempotent)
+│   ├── verify.py         # Post-deploy smoke test — invokes the live endpoint
+│   ├── teardown.py       # Deletes AgentCore runtime and IAM role
+│   └── start.sh          # (unused locally) dependency install + launch for runtime
+│
+├── tests/
+│   ├── unit/             # Unit tests for agent.py, app.py, verify.py
+│   ├── integration/      # Integration tests for the agentic tool-calling loop
+│   └── evals/            # Deterministic behavioural contract tests
+│
+├── .vscode/
+│   ├── launch.json       # F5 debug config — loads .env automatically
+│   └── extensions.json   # Recommended VS Code extensions
+│
+├── Makefile              # Shortcuts: install, run, deploy, verify, test, lint
+│
+├── _bmad/                # BMAD framework core — agents, skills, workflows (not agent code)
+└── _bmad-output/         # BMAD planning artifacts (PRD, architecture, stories)
+                          # Not part of the agent implementation
 ```
 
-## BMAD Agent Team
+### Why are there two Python files for the agent?
 
-The following specialized agents are available to guide development:
+`agent.py` uses the **Strands Agents SDK** — the clean, high-level API that makes this demo readable and forkable. It runs as a local interactive REPL.
 
-| Agent | Name | Role |
-|-------|------|------|
-| 📊 analyst | Mary | Business analysis, market research, requirements elicitation |
-| 🏗️ architect | Winston | System architecture, cloud infrastructure, API design |
-| 💻 dev | Amelia | Story execution, TDD, code implementation |
-| 📋 pm | John | PRD creation, requirements discovery, stakeholder alignment |
-| 🧪 qa | Quinn | Test automation, API testing, E2E testing |
-| 🚀 quick-flow-solo-dev | Barry | Rapid spec creation and lean implementation |
-| 🏃 sm | Bob | Sprint planning, story preparation, agile ceremonies |
-| 📚 tech-writer | Paige | Technical documentation and knowledge curation |
-| 🎨 ux-designer | Sally | User research, interaction design, UI patterns |
-| 🧪 tea | Murat | Master test architect, risk-based testing, CI/CD governance |
+`deploy/app.py` uses **boto3 directly** for the AgentCore cloud runtime. The Strands SDK cannot be pip-installed within AgentCore's 30-second startup window, so `app.py` reimplements the same agent behaviour (identical system prompt and tool) using the Bedrock Converse API. This is a deployment constraint, not an architectural preference.
 
-## Getting Started
+**The agent behaves identically in both environments.** If you fork this project and add tools, add them to both `agent.py` (`@tool` decorator) and `deploy/app.py` (`TOOLS` list + handler in `_run_agent`).
 
-### Prerequisites
+---
 
-- Claude Code CLI or Cursor IDE
-- BMAD Framework v6.2.0 (included)
+## How It Works
 
-### Running Agents
-
-Invoke any BMAD agent directly using slash commands in your IDE:
-
-```text
-/bmad-pm          # Start a product management session
-/bmad-architect   # Engage the architect
-/bmad-dev         # Start a development session
-/bmad-party-mode  # Start a collaborative multi-agent discussion
+```
+User types: "I was born on 14th March 1990"
+    │
+    ▼
+REPL loop (agent.py) passes input to Strands Agent()
+    │
+    ▼
+Agent sends to LLM (Bedrock / Gemini) with system prompt + tool list
+    │
+    ▼
+LLM decides: I need today's date → calls get_today_date tool
+    │
+    ▼
+get_today_date() returns: "2026-03-18"   ← stdlib datetime, no network call
+    │
+    ▼
+LLM calculates: days between 1990-03-14 and 2026-03-18 = 13,149
+    │
+    ▼
+LLM responds: "You were born 13,149 days ago! 🎂"
+    │
+    ▼
+Response printed to terminal
 ```
 
-### Development Workflow
+In AgentCore (cloud), the same flow runs inside `deploy/app.py` via the Bedrock Converse API. Every step where the LLM calls `get_today_date` is automatically captured in the AgentCore console — input, output, and latency — with zero custom logging code.
 
-BMAD organizes work into four phases:
+### Model provider switching
 
-1. **Analysis** — Run `/bmad-analyst` or `/bmad-domain-research` to investigate the problem space.
-2. **Planning** — Run `/bmad-create-prd` to define requirements, then `/bmad-create-architecture` for technical design.
-3. **Solutioning** — Run `/bmad-create-epics-and-stories` to break work into executable stories.
-4. **Implementation** — Run `/bmad-dev-story` to implement each story with tests.
+Change two env vars in `.env` — no code modification required:
 
-Artifacts from each phase are saved to `_bmad-output/`.
+```bash
+# Amazon Bedrock (default)
+MODEL_PROVIDER=bedrock
+MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
 
-## Workflows
+# Google Gemini (free tier fallback)
+MODEL_PROVIDER=gemini
+MODEL_ID=gemini-2.0-flash
+GOOGLE_API_KEY=your-key-here
+# Also: pip install strands-agents[gemini]
+```
 
-Key workflows available via slash commands:
+---
 
-| Command | Description |
-|---------|-------------|
-| `/bmad-create-prd` | Create a Product Requirements Document |
-| `/bmad-create-architecture` | Design the technical solution |
-| `/bmad-create-epics-and-stories` | Break requirements into epics and stories |
-| `/bmad-sprint-planning` | Plan sprint execution |
-| `/bmad-dev-story` | Implement a story |
-| `/bmad-code-review` | Adversarial code review |
-| `/bmad-quick-spec` | Rapid tech spec for small changes |
-| `/bmad-party-mode` | Multi-agent collaborative session |
+## Make Targets
+
+```bash
+make install        # Create venv and install dependencies
+make run            # Run the agent locally (python agent.py)
+make deploy         # Deploy to AgentCore (python deploy/deploy.py)
+make verify         # Verify deployed agent (python deploy/verify.py)
+make teardown       # Delete AgentCore runtime and IAM role
+make test           # Run unit + integration + eval tests (43 tests)
+make test-unit      # Unit tests only
+make lint           # Check formatting with black (no changes made)
+make format         # Auto-format all Python files with black
+```
+
+---
+
+## Troubleshooting
+
+**`AccessDeniedException` during deployment**
+
+Your IAM user is missing permissions. Check the [Prerequisites](#prerequisites) section for the required policy actions. See the [AgentCore permissions guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html).
+
+**`ResourceNotFoundException` — wrong region**
+
+AgentCore is available in select regions. Confirm `AWS_REGION=us-east-1` in `.env` (or `us-west-2`).
+
+**`KeyError: 'MODEL_PROVIDER'` or similar on startup**
+
+`.env` is missing or the variable isn't set. Run `cp .env.example .env` and fill in all required values.
+
+**Model access error from Bedrock**
+
+`anthropic.claude-3-haiku-20240307-v1:0` must be enabled in your account. Go to AWS Console → Amazon Bedrock → Model access → find Claude 3 Haiku → Request access.
+
+**`venv/bin/python: No such file or directory`**
+
+You haven't created the virtual environment yet. Run `python -m venv venv && source venv/bin/activate` first.
+
+**`make verify` fails — agent deployed but no response**
+
+Check the runtime status in the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/). If status is not `READY`, re-run `make deploy`. If it shows `FAILED`, check the CloudWatch logs linked from the console.
+
+**Deployment succeeds but verify times out**
+
+The default verify timeout is 30 seconds. Set `VERIFY_TIMEOUT_SECONDS=60` in `.env` and retry.
+
+---
 
 ## Contributing
 
-This project follows the BMAD methodology. Before contributing:
-
-1. Review the agent manifest at `_bmad/_config/agent-manifest.csv`.
-2. Check documentation standards at `_bmad/_memory/tech-writer-sidecar/documentation-standards.md`.
-3. Use `/bmad-create-story` to create a story before implementing changes.
-4. Run `/bmad-code-review` before submitting.
+1. All Python files must pass `make lint` (black formatting).
+2. All tests must pass: `make test`.
+3. Never commit `.env`, AWS credentials, or API keys.
+4. To add a new tool: update both `agent.py` (`@tool` decorator) and `deploy/app.py` (`TOOLS` list + tool handler in `_run_agent`).
+5. Keep `agent.py` under 150 lines — extract to `tools.py` if it grows beyond that.
+6. This repo uses the [BMAD methodology](https://github.com/bmad-agents/bmad-method) — use `/bmad-create-story` before implementing changes and `/bmad-code-review` before submitting.

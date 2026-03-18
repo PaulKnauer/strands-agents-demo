@@ -57,7 +57,7 @@ development_status:
   epic-2-retrospective: optional
 
   # ─── Epic 3: Developer Documentation & Project Finalization ─────────────────
-  epic-3: backlog
-  3-1-comprehensive-readme: backlog
+  epic-3: in-progress
+  3-1-comprehensive-readme: review
   3-2-inline-code-documentation-and-project-structure-finalization: backlog
   epic-3-retrospective: optional
