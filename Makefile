@@ -1,6 +1,6 @@
-PYTHON  := venv/bin/python
-PIP     := venv/bin/pip
-# Use venv black when available (local dev); fall back to PATH black (CI)
+# Use venv binaries when available (local dev); fall back to PATH (CI / no venv)
+PYTHON  := $(shell test -f venv/bin/python && echo venv/bin/python || echo python)
+PIP     := $(shell test -f venv/bin/pip && echo venv/bin/pip || echo pip)
 BLACK   := $(shell test -f venv/bin/black && echo venv/bin/black || echo black)
 
 # ── Help ─────────────────────────────────────────────────────────────────────
