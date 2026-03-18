@@ -55,8 +55,8 @@ def create_agent():
     return Agent(model=model, tools=[get_today_date], system_prompt=SYSTEM_PROMPT)
 
 
-if __name__ == "__main__":
-    agent = create_agent()
+def run_repl(agent) -> None:
+    """Run the interactive REPL loop until the user exits."""
     print("Age-in-Days Agent (type 'exit' to quit)")
     while True:
         user_input = input("\nYou: ").strip()
@@ -68,3 +68,7 @@ if __name__ == "__main__":
             continue
         response = agent(user_input)
         print(f"\nAgent: {response}")
+
+
+if __name__ == "__main__":
+    run_repl(create_agent())

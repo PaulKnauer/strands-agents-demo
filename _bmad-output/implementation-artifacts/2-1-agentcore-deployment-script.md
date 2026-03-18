@@ -1,6 +1,6 @@
 # Story 2.1: AgentCore Deployment Script
 
-Status: review
+Status: done
 
 ## Story
 
@@ -21,6 +21,8 @@ so that my agent is running in production without any manual AWS console steps.
 5. **Given** `deploy/deploy.py` completes successfully, **When** I read the console output, **Then** the deployed agent endpoint URL is clearly displayed and I can copy it for verification.
 
 6. **Given** I examine `deploy/deploy.py`, **When** I read it, **Then** all non-obvious blocks have inline comments explaining the *why*, it follows PEP 8, and `black deploy/deploy.py` produces no changes.
+
+7. **Given** the deployed agent receives an HTTP invocation payload, **When** the prompt key is missing, empty/whitespace, or exceeds 4000 characters, **Then** `handle_invocation` in `deploy/app.py` returns an error string without invoking the Bedrock Converse API. *(Retrospective AC — defensive cloud boundary guard added during Story 2.1 implementation.)*
 
 ## Tasks / Subtasks
 

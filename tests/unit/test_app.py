@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from deploy.app import _get_today_date, _run_agent, handle_invocation
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _end_turn(text: str) -> dict:
     return {
@@ -37,9 +37,11 @@ def _tool_use(tool_use_id: str = "tu-001") -> dict:
 
 # ── _get_today_date ───────────────────────────────────────────────────────────
 
+
 class TestGetTodayDate:
     def test_returns_iso_format(self):
         import re
+
         result = _get_today_date()
         assert re.match(r"^\d{4}-\d{2}-\d{2}$", result), f"Not ISO date: {result}"
 
@@ -52,6 +54,7 @@ class TestGetTodayDate:
 
 
 # ── _run_agent ────────────────────────────────────────────────────────────────
+
 
 class TestRunAgent:
     @patch("deploy.app.boto3.client")
@@ -129,7 +132,9 @@ class TestRunAgent:
     def test_empty_prompt_passed_through(self, mock_client):
         mock_bedrock = MagicMock()
         mock_client.return_value = mock_bedrock
-        mock_bedrock.converse.return_value = _end_turn("Please provide a date of birth.")
+        mock_bedrock.converse.return_value = _end_turn(
+            "Please provide a date of birth."
+        )
 
         _run_agent("")
 
@@ -138,6 +143,7 @@ class TestRunAgent:
 
 
 # ── handle_invocation ─────────────────────────────────────────────────────────
+
 
 class TestHandleInvocation:
     @patch("deploy.app.boto3.client")
@@ -151,13 +157,16 @@ class TestHandleInvocation:
         assert result == "You are 1000 days old."
 
     def test_missing_prompt_key_returns_error(self):
+        """AC #7 (Story 2.1): missing prompt key → error string, no Bedrock call."""
         result = handle_invocation({})
         assert result == "Error: empty prompt."
 
     def test_empty_prompt_returns_error(self):
+        """AC #7 (Story 2.1): empty/whitespace prompt → error string, no Bedrock call."""
         result = handle_invocation({"prompt": "   "})
         assert result == "Error: empty prompt."
 
     def test_oversized_prompt_returns_error(self):
+        """AC #7 (Story 2.1): prompt > 4000 chars → error string, no Bedrock call."""
         result = handle_invocation({"prompt": "x" * 4001})
         assert "4000" in result

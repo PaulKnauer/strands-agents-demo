@@ -1,0 +1,184 @@
+"""Static file contract tests — verifies scaffold files satisfy their Story ACs.
+
+AC #2 (Story 1.1): requirements.txt contains pinned/minimum deps.
+AC #3 (Story 1.1): .env.example contains required section headers and variables.
+AC #5 (Story 1.1): .gitignore excludes .env, __pycache__/, .venv/, *.pyc.
+AC #2 (Story 1.3): .vscode/launch.json has type=debugpy, console=integratedTerminal, envFile.
+AC #4 (Story 1.3): .vscode/extensions.json recommends ms-python.python and vscode-pylance.
+AC #6 (Story 1.2): agent.py is under 150 lines.
+
+AC references: Story 3.3 AC #6.
+"""
+
+import json
+import pathlib
+
+PROJECT_ROOT = pathlib.Path(__file__).parent.parent.parent
+assert (
+    PROJECT_ROOT / "agent.py"
+).exists(), f"PROJECT_ROOT resolved incorrectly: {PROJECT_ROOT}"
+
+
+# ── requirements.txt ─────────────────────────────────────────────────────────
+
+
+class TestRequirementsTxt:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / "requirements.txt").read_text()
+
+    def test_strands_agents_is_pinned(self):
+        """AC #2 (Story 1.1): strands-agents must be pinned to exact version."""
+        assert "strands-agents==1.26.0" in self._content()
+
+    def test_contains_strands_agents_tools(self):
+        """AC #2 (Story 1.1): strands-agents-tools must be present."""
+        assert "strands-agents-tools" in self._content()
+
+    def test_contains_python_dotenv(self):
+        """AC #2 (Story 1.1): python-dotenv must be present."""
+        assert "python-dotenv" in self._content()
+
+    def test_contains_boto3(self):
+        """AC #2 (Story 1.1): boto3 must be present."""
+        assert "boto3" in self._content()
+
+    def test_contains_bedrock_agentcore(self):
+        """AC #2 (Story 1.1): bedrock-agentcore (deploy dependency) must be present."""
+        assert "bedrock-agentcore" in self._content()
+
+
+# ── .env.example ─────────────────────────────────────────────────────────────
+
+
+class TestEnvExample:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / ".env.example").read_text()
+
+    def test_has_llm_configuration_section(self):
+        """AC #3 (Story 1.1): LLM Configuration section header must be present."""
+        assert "# --- LLM Configuration ---" in self._content()
+
+    def test_has_aws_configuration_section(self):
+        """AC #3 (Story 1.1): AWS Configuration section header must be present."""
+        assert "# --- AWS Configuration" in self._content()
+
+    def test_has_agentcore_deployment_section(self):
+        """AC #3 (Story 1.1): AgentCore Deployment section header must be present."""
+        assert "# --- AgentCore Deployment ---" in self._content()
+
+    def test_has_google_gemini_section(self):
+        """AC #3 (Story 1.1): Optional Google Gemini section header must be present."""
+        assert "# --- Optional: Google Gemini" in self._content()
+
+    def test_has_model_provider_variable(self):
+        assert "MODEL_PROVIDER" in self._content()
+
+    def test_has_model_id_variable(self):
+        assert "MODEL_ID" in self._content()
+
+    def test_has_aws_region_variable(self):
+        assert "AWS_REGION" in self._content()
+
+    def test_has_agent_name_variable(self):
+        assert "AGENT_NAME" in self._content()
+
+    def test_has_google_api_key_variable(self):
+        assert "GOOGLE_API_KEY" in self._content()
+
+    def test_no_real_aws_key_id(self):
+        """AC #3 (Story 1.1): .env.example must not contain real AWS access key IDs."""
+        content = self._content()
+        # Real AWS key IDs start with AKIA, ASIA, or AROA followed by 16 uppercase chars
+        import re
+
+        assert not re.search(
+            r"\b(AKIA|ASIA|AROA)[A-Z0-9]{16}\b", content
+        ), ".env.example appears to contain a real AWS access key ID"
+
+
+# ── .gitignore ────────────────────────────────────────────────────────────────
+
+
+class TestGitignore:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / ".gitignore").read_text()
+
+    def test_excludes_dotenv(self):
+        """AC #5 (Story 1.1): .env must be in .gitignore."""
+        assert ".env" in self._content()
+
+    def test_excludes_pycache(self):
+        """AC #5 (Story 1.1): __pycache__/ must be in .gitignore."""
+        assert "__pycache__/" in self._content()
+
+    def test_excludes_venv(self):
+        """AC #5 (Story 1.1): .venv/ must be in .gitignore."""
+        assert ".venv/" in self._content()
+
+    def test_excludes_pyc(self):
+        """AC #5 (Story 1.1): *.pyc (or broader *.py[cod]) must be in .gitignore."""
+        content = self._content()
+        # Accept either exact *.pyc or the broader glob *.py[cod] which covers pyc/pyo/pyd
+        assert "*.pyc" in content or "*.py[cod]" in content
+
+
+# ── .vscode/launch.json ───────────────────────────────────────────────────────
+
+
+class TestVSCodeLaunchJson:
+    def _config(self) -> dict:
+        path = PROJECT_ROOT / ".vscode" / "launch.json"
+        return json.loads(path.read_text())
+
+    def _first_config(self) -> dict:
+        configs = self._config().get("configurations", [])
+        assert configs, ".vscode/launch.json has no configurations"
+        return configs[0]
+
+    def test_type_is_debugpy(self):
+        """AC #2 (Story 1.3): debugger type must be debugpy."""
+        assert self._first_config()["type"] == "debugpy"
+
+    def test_console_is_integrated_terminal(self):
+        """AC #2 (Story 1.3): console must be integratedTerminal (required for input() REPL)."""
+        assert self._first_config()["console"] == "integratedTerminal"
+
+    def test_env_file_references_dotenv(self):
+        """AC #2 (Story 1.3): envFile must reference .env."""
+        env_file = self._first_config().get("envFile", "")
+        assert ".env" in env_file
+
+    def test_program_points_to_agent_py(self):
+        """AC #1 (Story 1.3): program must launch agent.py."""
+        program = self._first_config().get("program", "")
+        assert "agent.py" in program
+
+
+# ── .vscode/extensions.json ───────────────────────────────────────────────────
+
+
+class TestVSCodeExtensionsJson:
+    def _recommendations(self) -> list:
+        path = PROJECT_ROOT / ".vscode" / "extensions.json"
+        return json.loads(path.read_text()).get("recommendations", [])
+
+    def test_recommends_python_extension(self):
+        """AC #4 (Story 1.3): ms-python.python must be recommended."""
+        assert "ms-python.python" in self._recommendations()
+
+    def test_recommends_pylance(self):
+        """AC #4 (Story 1.3): ms-python.vscode-pylance must be recommended."""
+        assert "ms-python.vscode-pylance" in self._recommendations()
+
+
+# ── agent.py line count ───────────────────────────────────────────────────────
+
+
+class TestAgentPyConstraints:
+    def test_under_150_lines(self):
+        """AC #6 (Story 1.2): agent.py must stay under 150 lines."""
+        lines = (PROJECT_ROOT / "agent.py").read_text().splitlines()
+        assert len(lines) < 150, (
+            f"agent.py has {len(lines)} lines — exceeds 150-line architectural limit. "
+            "Extract tools to tools.py if the file grows beyond this."
+        )

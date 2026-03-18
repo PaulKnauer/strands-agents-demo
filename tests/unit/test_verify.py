@@ -18,7 +18,13 @@ def _client_error(code: str, message: str = "error") -> ClientError:
 def _make_ctrl(found: bool = True) -> MagicMock:
     mock = MagicMock()
     runtimes = (
-        [{"agentRuntimeName": "test_agent", "agentRuntimeId": "id-1", "agentRuntimeArn": AGENT_ARN}]
+        [
+            {
+                "agentRuntimeName": "test_agent",
+                "agentRuntimeId": "id-1",
+                "agentRuntimeArn": AGENT_ARN,
+            }
+        ]
         if found
         else []
     )
@@ -26,7 +32,12 @@ def _make_ctrl(found: bool = True) -> MagicMock:
     return mock
 
 
-def _make_data(body: str = "You are 13149 days old.") -> MagicMock:
+def _make_data(body: str = '"You are 13149 days old."') -> MagicMock:
+    """Return a mock data-plane client whose invoke_agent_runtime returns a JSON-encoded body.
+
+    AC #7 (Story 3.3): body is a JSON-encoded string (e.g. '"text"') so _decode_body
+    unwrapping is exercised on the happy path, not bypassed by a plain string.
+    """
     mock = MagicMock()
     mock.invoke_agent_runtime.return_value = {"response": body}
     return mock
@@ -35,10 +46,12 @@ def _make_data(body: str = "You are 13149 days old.") -> MagicMock:
 def _boto3_factory(ctrl, data):
     def factory(service_name, **kwargs):
         return ctrl if service_name == "bedrock-agentcore-control" else data
+
     return factory
 
 
 # ── _decode_body ─────────────────────────────────────────────────────────────
+
 
 class TestDecodeBody:
     def test_unwraps_json_string(self):
@@ -60,13 +73,22 @@ class TestDecodeBody:
 
 # ── _find_existing_runtime ────────────────────────────────────────────────────
 
+
 class TestFindExistingRuntime:
     def test_found_returns_id_and_arn(self):
         ctrl = MagicMock()
         ctrl.list_agent_runtimes.return_value = {
             "agentRuntimes": [
-                {"agentRuntimeName": "other", "agentRuntimeId": "id-0", "agentRuntimeArn": "arn-0"},
-                {"agentRuntimeName": "my_agent", "agentRuntimeId": "id-1", "agentRuntimeArn": "arn-1"},
+                {
+                    "agentRuntimeName": "other",
+                    "agentRuntimeId": "id-0",
+                    "agentRuntimeArn": "arn-0",
+                },
+                {
+                    "agentRuntimeName": "my_agent",
+                    "agentRuntimeId": "id-1",
+                    "agentRuntimeArn": "arn-1",
+                },
             ]
         }
         runtime_id, runtime_arn = _find_existing_runtime(ctrl, "my_agent")
@@ -84,11 +106,23 @@ class TestFindExistingRuntime:
         ctrl = MagicMock()
         ctrl.list_agent_runtimes.side_effect = [
             {
-                "agentRuntimes": [{"agentRuntimeName": "other", "agentRuntimeId": "id-0", "agentRuntimeArn": "arn-0"}],
+                "agentRuntimes": [
+                    {
+                        "agentRuntimeName": "other",
+                        "agentRuntimeId": "id-0",
+                        "agentRuntimeArn": "arn-0",
+                    }
+                ],
                 "nextToken": "tok-1",
             },
             {
-                "agentRuntimes": [{"agentRuntimeName": "my_agent", "agentRuntimeId": "id-2", "agentRuntimeArn": "arn-2"}],
+                "agentRuntimes": [
+                    {
+                        "agentRuntimeName": "my_agent",
+                        "agentRuntimeId": "id-2",
+                        "agentRuntimeArn": "arn-2",
+                    }
+                ],
             },
         ]
         runtime_id, runtime_arn = _find_existing_runtime(ctrl, "my_agent")
@@ -100,6 +134,7 @@ class TestFindExistingRuntime:
 
 
 # ── main() ────────────────────────────────────────────────────────────────────
+
 
 class TestMain:
     def _run_main(self, ctrl, data, env=None, monotonic_values=None):
@@ -127,6 +162,7 @@ class TestMain:
 
     def test_missing_env_var_exits_1(self):
         from deploy.verify import main
+
         with (
             patch("deploy.verify.load_dotenv"),
             patch.dict(os.environ, {}, clear=True),
@@ -147,11 +183,15 @@ class TestMain:
 
         ctrl = _make_ctrl(found=True)
         data = MagicMock()
-        data.invoke_agent_runtime.side_effect = ReadTimeoutError(endpoint_url="https://test")
+        data.invoke_agent_runtime.side_effect = ReadTimeoutError(
+            endpoint_url="https://test"
+        )
 
         with (
             patch("deploy.verify.load_dotenv"),
-            patch.dict(os.environ, {**ENV, "VERIFY_TIMEOUT_SECONDS": "30"}, clear=False),
+            patch.dict(
+                os.environ, {**ENV, "VERIFY_TIMEOUT_SECONDS": "30"}, clear=False
+            ),
             patch("deploy.verify.boto3.client", side_effect=_boto3_factory(ctrl, data)),
             patch("deploy.verify.time.monotonic", side_effect=[0.0]),
             pytest.raises(SystemExit) as exc,

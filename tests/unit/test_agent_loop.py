@@ -1,7 +1,13 @@
-"""Integration tests for the full agentic loop in deploy/app.py.
+"""Unit tests for the _run_agent message protocol in deploy/app.py.
 
 Validates the complete message sequence passed to the Bedrock Converse API,
 ensuring the protocol (user → assistant → tool_result → assistant) is correct.
+
+Note: These tests use mocked boto3 and do NOT exercise the Strands SDK or
+make real AWS calls. Real SDK integration tests require live credentials and
+are out of scope for the automated test suite.
+
+AC #10 (Story 3.3): moved from tests/integration/ — honest naming for mock-only tests.
 """
 
 import pytest
@@ -53,10 +59,10 @@ class TestAgentLoopMessageSequence:
         assert result == "You are 13149 days old."
         assert mock_bedrock.converse.call_count == 2
 
-        # The messages list is mutated in-place; both call_args entries reference the
-        # same list object showing its final accumulated state:
-        # [user, assistant(tool_use), user(tool_result), assistant(final)]
-        final_messages = mock_bedrock.converse.call_args_list[0][1]["messages"]
+        # Messages list is mutated in-place; use the last call_args to read final accumulated state.
+        # All call_args entries reference the same list object — call_args_list[-1] is the
+        # canonical final state: [user, assistant(tool_use), user(tool_result), assistant(final)]
+        final_messages = mock_bedrock.converse.call_args_list[-1][1]["messages"]
         assert len(final_messages) == 4
 
         assert final_messages[0]["role"] == "user"
@@ -69,6 +75,7 @@ class TestAgentLoopMessageSequence:
         assert tool_result["toolUseId"] == "tu-001"
         # Tool result must be a valid ISO date returned by _get_today_date()
         import re
+
         tool_result_text = tool_result["content"][0]["text"]
         assert re.match(r"^\d{4}-\d{2}-\d{2}$", tool_result_text)
 
@@ -91,9 +98,9 @@ class TestAgentLoopMessageSequence:
         assert result == "Final."
         assert mock_bedrock.converse.call_count == 3
 
-        # Final accumulated list (all call_args reference same in-place list):
+        # Messages list is mutated in-place; use call_args_list[-1] for final accumulated state.
         # user, asst(tu-001), user(result-001), asst(tu-002), user(result-002), asst(final)
-        final_messages = mock_bedrock.converse.call_args_list[2][1]["messages"]
+        final_messages = mock_bedrock.converse.call_args_list[-1][1]["messages"]
         assert len(final_messages) == 6
 
     @patch("deploy.app.boto3.client")
