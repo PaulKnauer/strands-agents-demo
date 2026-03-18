@@ -1,0 +1,63 @@
+# generated: 2026-03-16
+# last_updated: 2026-03-18
+# project: strands-agents-demo
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories should be worked in sequence (1.1 → 1.2 → 1.3 → 2.1 → 2.2 → 3.1 → 3.2)
+# - Story 2.2 MUST follow Story 2.1 (requires deployed agent to verify)
+# - Story 1.2 implements the full agent.py in one pass — do not split
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-16
+last_updated: 2026-03-18
+project: strands-agents-demo
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ─── Epic 1: Local Agent — Working Age-in-Days Calculator ───────────────────
+  epic-1: done
+  1-1-project-scaffold-and-dependency-setup: done
+  1-2-working-age-in-days-agent: done
+  1-3-vs-code-debug-configuration: done
+  epic-1-retrospective: optional
+
+  # ─── Epic 2: AgentCore Production Deployment & Observability ────────────────
+  epic-2: done
+  2-1-agentcore-deployment-script: done
+  2-2-endpoint-verification-and-observability-confirmation: done
+  epic-2-retrospective: optional
+
+  # ─── Epic 3: Developer Documentation & Project Finalization ─────────────────
+  epic-3: backlog
+  3-1-comprehensive-readme: backlog
+  3-2-inline-code-documentation-and-project-structure-finalization: backlog
+  epic-3-retrospective: optional
