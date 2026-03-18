@@ -3,7 +3,7 @@
 # Version: 6.2.0
 # Date: 2026-03-16T14:29:59.200Z
 
-project_name: stands-agents-demo
+project_name: strands-agents-demo
 user_skill_level: intermediate
 planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
 implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
