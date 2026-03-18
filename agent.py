@@ -33,6 +33,8 @@ def get_today_date() -> str:
 
 def create_agent():
     """Construct and return the agent. Deferred so import has no side effects."""
+    # os.environ[] raises KeyError on missing vars — fail-fast surfaces misconfiguration
+    # immediately rather than silently running with a wrong provider or unexpected default
     provider = os.environ["MODEL_PROVIDER"]
     if provider == "gemini":
         from strands.models.gemini import (
@@ -58,8 +60,10 @@ if __name__ == "__main__":
     print("Age-in-Days Agent (type 'exit' to quit)")
     while True:
         user_input = input("\nYou: ").strip()
+        # Accept common exit variations — users naturally type any of these
         if user_input.lower() in ("exit", "quit", "q"):
             break
+        # Skip empty input silently — forwarding a blank string to the LLM wastes an API call
         if not user_input:
             continue
         response = agent(user_input)

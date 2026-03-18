@@ -56,7 +56,10 @@ def _get_today_date() -> str:
 
 def _run_agent(prompt: str) -> str:
     """Run the agentic tool-calling loop via the Bedrock Converse API."""
-    model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+    # MODEL_ID is always injected by deploy.py's environmentVariables — the default
+    # only fires in misconfigured test scenarios. Use haiku: confirmed available on
+    # standard accounts without Marketplace subscription (sonnet requires it).
+    model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
     region = os.environ.get("AWS_REGION", "us-east-1")
 
     bedrock = boto3.client("bedrock-runtime", region_name=region)
