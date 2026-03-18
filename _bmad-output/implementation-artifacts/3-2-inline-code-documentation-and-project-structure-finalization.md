@@ -1,6 +1,6 @@
 # Story 3.2: Inline Code Documentation & Project Structure Finalization
 
-Status: review
+Status: done
 
 ## Story
 
