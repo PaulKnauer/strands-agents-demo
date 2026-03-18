@@ -111,7 +111,9 @@ def main() -> None:
         msg = e.response["Error"]["Message"]
         print(f"Invocation failed ({code}): {msg}")
         if code in ("AccessDeniedException", "UnauthorizedException"):
-            print("  Hint: Your IAM user/role needs bedrock-agentcore:InvokeAgentRuntime.")
+            print(
+                "  Hint: Your IAM user/role needs bedrock-agentcore:InvokeAgentRuntime."
+            )
         elif code == "ResourceNotFoundException":
             print("  Hint: Runtime not found — check AGENT_NAME and AWS_REGION.")
         else:
@@ -148,7 +150,9 @@ def main() -> None:
     print(f"Agent responded (in {elapsed:.1f}s):\n")
     print(result)
     print("\nVerification complete.")
-    print("Next: open the AgentCore console to confirm get_today_date tool traces are visible.")
+    print(
+        "Next: open the AgentCore console to confirm get_today_date tool traces are visible."
+    )
     print("  https://console.aws.amazon.com/bedrock-agentcore/")
 
 

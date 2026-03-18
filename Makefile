@@ -1,6 +1,7 @@
 PYTHON  := venv/bin/python
 PIP     := venv/bin/pip
-BLACK   := venv/bin/black
+# Use venv black when available (local dev); fall back to PATH black (CI)
+BLACK   := $(shell test -f venv/bin/black && echo venv/bin/black || echo black)
 
 # ── Help ─────────────────────────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ from bedrock_agentcore import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MAX_TURNS = 10       # prevent runaway tool-calling loops
+MAX_TURNS = 10  # prevent runaway tool-calling loops
 MAX_PROMPT_CHARS = 4000  # guard against token-cost amplification attacks
 
 # Identical system prompt to agent.py — same agent behaviour in cloud as locally.
