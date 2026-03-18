@@ -1,6 +1,6 @@
 # Story 3.1: Comprehensive README
 
-Status: review
+Status: done
 
 ## Story
 
