@@ -154,7 +154,7 @@ class TestMain:
 
     def test_happy_path_exits_cleanly(self, capsys):
         ctrl = _make_ctrl(found=True)
-        data = _make_data("You are 13149 days old.")
+        data = _make_data('"You are 13149 days old."')  # JSON-encoded: exercises _decode_body
         self._run_main(ctrl, data)  # must not raise
         captured = capsys.readouterr()
         assert "13149" in captured.out

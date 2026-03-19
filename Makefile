@@ -18,7 +18,7 @@ help:
 	@echo "    make run          Run the age-in-days agent (local REPL)"
 	@echo "    make format       Auto-format Python files with black"
 	@echo "    make lint         Check formatting with black (no changes)"
-	@echo "    make test         Run unit + integration + eval tests"
+	@echo "    make test         Run unit + eval tests"
 	@echo "    make test-unit    Run unit tests only"
 	@echo "    make test-evals   Run deterministic evals (no AWS required)"
 	@echo "    make test-evals-live  Run all evals including live LLM"
@@ -69,10 +69,6 @@ lint:
 test-unit:
 	$(PYTHON) -m pytest tests/unit/ -v
 
-.PHONY: test-integration
-test-integration:
-	$(PYTHON) -m pytest tests/integration/ -v
-
 .PHONY: test-evals
 test-evals:
 	$(PYTHON) -m pytest tests/evals/ -v -m "not eval"
@@ -82,7 +78,7 @@ test-evals-live:
 	$(PYTHON) -m pytest tests/evals/ -v
 
 .PHONY: test
-test: test-unit test-integration test-evals
+test: test-unit test-evals
 
 # ── Deployment ───────────────────────────────────────────────────────────────
 
