@@ -1,5 +1,5 @@
 # generated: 2026-03-16
-# last_updated: 2026-03-18
+# last_updated: 2026-03-20
 # project: strands-agents-demo
 # project_key: NOKEY
 # tracking_system: file-system
@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-16
-last_updated: 2026-03-18
+last_updated: 2026-03-20
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -62,3 +62,12 @@ development_status:
   3-2-inline-code-documentation-and-project-structure-finalization: done
   3-3-test-coverage-gaps-and-feature-drift-resolution: done
   epic-3-retrospective: optional
+
+  # ─── Epic 4: NIST AI RMF Compliance Layer ───────────────────────────────────
+  epic-4: in-progress
+  4-1-governance-foundation-documentation: done
+  4-2-audit-hooks: backlog
+  4-3-bedrock-guardrails: backlog
+  4-4-red-team-ci: backlog
+  4-5-compliance-dashboard: backlog
+  epic-4-retrospective: optional
