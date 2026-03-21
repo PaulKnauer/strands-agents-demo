@@ -5,7 +5,7 @@
 # NIST MEASURE evidence (MEASURE-2.4, MEASURE-2.7, MEASURE-2.8, MEASURE-2.11).
 #
 # HOW TO RUN (requires Node.js 18+, AWS credentials, GUARDRAIL_ID in environment):
-#   npx promptfoo@latest redteam run --config compliance/promptfoo-redteam.yaml \
+#   npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml \
 #     --output compliance/redteam-report.json
 # or:
 #   make redteam

@@ -97,7 +97,7 @@ teardown:
 
 .PHONY: redteam
 redteam:
-	npx promptfoo@latest redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
+	npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
 
 # ── Housekeeping ─────────────────────────────────────────────────────────────
 

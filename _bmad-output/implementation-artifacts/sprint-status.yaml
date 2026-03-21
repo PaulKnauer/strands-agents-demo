@@ -68,6 +68,6 @@ development_status:
   4-1-governance-foundation-documentation: done
   4-2-audit-hooks: done
   4-3-bedrock-guardrails: done
-  4-4-red-team-ci: review
+  4-4-red-team-ci: done
   4-5-compliance-dashboard: backlog
   epic-4-retrospective: optional

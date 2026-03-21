@@ -13,8 +13,6 @@ NIST AI RMF functions addressed:
 What this file does NOT test (already covered elsewhere):
 - SYSTEM_PROMPT parity between agent.py and deploy/app.py
   → tests/evals/test_prompt_parity.py:test_system_prompt_parity()
-- deploy/app.py TOOLS list tool name
-  → tests/evals/test_prompt_parity.py:test_tools_parity()
 - Oversized prompt rejection (MAX_PROMPT_CHARS enforcement behaviour)
   → tests/unit/test_app.py:TestHandleInvocation.test_oversized_prompt_returns_error()
 - Guardrail wiring in agent.py and deploy/app.py
@@ -22,7 +20,10 @@ What this file does NOT test (already covered elsewhere):
 """
 
 import os
+from pathlib import Path
 from unittest.mock import patch
+
+import yaml
 
 
 class TestToolSurface:
@@ -70,6 +71,27 @@ class TestToolSurface:
         )
         assert tools[0].__name__ == "get_today_date", (
             f"Expected tool name 'get_today_date', got '{tools[0].__name__}'. "
+            "If the tool was renamed, update the risk register and this test."
+        )
+
+    def test_deployed_tool_surface_has_exactly_one_tool(self):
+        """deploy/app.py TOOLS must contain exactly one entry named get_today_date.
+
+        The deployed runtime (AgentCore) passes this list to the Converse API.
+        Adding a tool here expands the production capability surface and requires
+        a risk register update — this test CI-gates that requirement independently
+        from the local agent surface checked above.
+        """
+        from deploy.app import TOOLS
+
+        assert len(TOOLS) == 1, (
+            f"Expected exactly 1 tool in deploy.app.TOOLS, got {len(TOOLS)}: "
+            f"{[t.get('toolSpec', {}).get('name', repr(t)) for t in TOOLS]}. "
+            "Adding a new tool requires updating docs/risk-register.md."
+        )
+        tool_name = TOOLS[0]["toolSpec"]["name"]
+        assert tool_name == "get_today_date", (
+            f"Expected tool name 'get_today_date', got '{tool_name}'. "
             "If the tool was renamed, update the risk register and this test."
         )
 
@@ -146,4 +168,38 @@ class TestInputBoundaries:
         assert MAX_TURNS == 10, (
             f"MAX_TURNS changed to {MAX_TURNS} (expected 10). "
             "If intentional, update docs/risk-register.md and this test."
+        )
+
+
+class TestPromptfooConfig:
+    """Guard compliance/promptfoo-redteam.yaml against system prompt drift — NIST MEASURE-2.4.
+
+    The promptfoo red-team suite probes the model with the systemPrompt defined in
+    compliance/promptfoo-redteam.yaml. If that prompt drifts from agent.py's SYSTEM_PROMPT,
+    the adversarial probes test stale instructions rather than the live agent contract,
+    silently undermining the safety evidence the suite is meant to produce.
+    """
+
+    _PROMPTFOO_CONFIG = (
+        Path(__file__).parent.parent.parent / "compliance" / "promptfoo-redteam.yaml"
+    )
+
+    def test_promptfoo_system_prompt_matches_agent(self):
+        """compliance/promptfoo-redteam.yaml defaultTest.options.systemPrompt must equal agent.SYSTEM_PROMPT.
+
+        NIST MEASURE-2.4: ensures the red-team suite enforces the current safety
+        contract, not a stale copy. When SYSTEM_PROMPT changes in agent.py, update
+        compliance/promptfoo-redteam.yaml to match.
+        """
+        from agent import SYSTEM_PROMPT
+
+        with self._PROMPTFOO_CONFIG.open() as f:
+            config = yaml.safe_load(f)
+
+        promptfoo_prompt = config["defaultTest"]["options"]["systemPrompt"].strip()
+
+        assert promptfoo_prompt == SYSTEM_PROMPT, (
+            "compliance/promptfoo-redteam.yaml defaultTest.options.systemPrompt has "
+            "drifted from agent.SYSTEM_PROMPT. Update the YAML to match agent.py so "
+            "that the red-team suite probes the current safety contract."
         )

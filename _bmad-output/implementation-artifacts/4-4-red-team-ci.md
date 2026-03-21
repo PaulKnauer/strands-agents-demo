@@ -1,6 +1,6 @@
 # Story 4.4: Red-Team CI — Automated Safety Boundary Testing
 
-Status: review
+Status: done
 
 ## Story
 
