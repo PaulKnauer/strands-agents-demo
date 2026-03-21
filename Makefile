@@ -27,6 +27,7 @@ help:
 	@echo "    make deploy       Deploy agent to AWS AgentCore"
 	@echo "    make verify       Invoke deployed agent and verify response"
 	@echo "    make teardown     Remove all AWS resources created by deploy"
+	@echo "    make redteam      Run promptfoo red-team scan (requires Node.js + AWS creds)"
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    make clean        Remove venv and compiled Python files"
@@ -93,6 +94,10 @@ verify:
 .PHONY: teardown
 teardown:
 	$(PYTHON) deploy/teardown.py
+
+.PHONY: redteam
+redteam:
+	npx promptfoo@latest redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
 
 # ── Housekeeping ─────────────────────────────────────────────────────────────
 
