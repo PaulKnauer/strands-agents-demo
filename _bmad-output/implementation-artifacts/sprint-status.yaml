@@ -64,7 +64,7 @@ development_status:
   epic-3-retrospective: optional
 
   # ─── Epic 4: NIST AI RMF Compliance Layer ───────────────────────────────────
-  epic-4: in-progress
+  epic-4: done
   4-1-governance-foundation-documentation: done
   4-2-audit-hooks: done
   4-3-bedrock-guardrails: done

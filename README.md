@@ -2,7 +2,11 @@
 
 A minimal, forkable reference implementation of an AI agent built with the [Strands Agents SDK](https://strandsagents.com) and deployed to [AWS AgentCore](https://aws.amazon.com/bedrock/agentcore/). The agent calculates a person's age in days from their date of birth — a deliberately simple use case that keeps the focus on the framework patterns, not the business logic.
 
+This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) — governance documentation, audit logging, Bedrock Guardrails, automated red-team CI, and a CloudWatch compliance dashboard. See [NIST AI RMF Compliance](#nist-ai-rmf-compliance) below.
+
 ## What This Demonstrates
+
+**Agent patterns:**
 
 | Pattern | Where |
 |---------|-------|
@@ -13,12 +17,23 @@ A minimal, forkable reference implementation of an AI agent built with the [Stra
 | Automatic tool-call observability — zero custom logging code | AgentCore console |
 | Single-file agent that can be forked by changing one file | `agent.py` |
 
+**NIST AI RMF responsible-AI patterns:**
+
+| Pattern | Where |
+|---------|-------|
+| AI system card, risk register, and governance charter | `docs/` |
+| Audit logging hook — JSONL tool-call trail via Strands lifecycle | `compliance/hooks.py` |
+| Bedrock Guardrails — PII redaction, prompt-injection defence, content filtering | `deploy/guardrail.yaml` |
+| Automated red-team CI — deterministic safety boundary tests + promptfoo adversarial probes | `tests/unit/test_safety_boundaries.py`, `compliance/promptfoo-redteam.yaml` |
+| CloudWatch compliance dashboard — guardrail block rate + audit trail | `deploy/create_dashboard.py` |
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
 - [Local Setup](#local-setup)
 - [VS Code Debugging](#vs-code-debugging)
 - [AgentCore Deployment](#agentcore-deployment)
+- [NIST AI RMF Compliance](#nist-ai-rmf-compliance)
 - [Project Structure](#project-structure)
 - [How It Works](#how-it-works)
 - [Make Targets](#make-targets)
@@ -182,6 +197,32 @@ python deploy/teardown.py
 
 ---
 
+## NIST AI RMF Compliance
+
+Epic 4 of this project implements a complete [NIST AI Risk Management Framework (AI RMF 1.0)](https://airc.nist.gov/RMF) compliance layer. The four NIST AI RMF functions are addressed as follows:
+
+| NIST Function | Subcategories | Artifact | `make` command |
+|---|---|---|---|
+| **GOVERN** | 1.1, 1.3, 1.4, 1.7, 6.1 | [`docs/governance-charter.md`](docs/governance-charter.md) — roles, risk tolerance, review cadence | — |
+| **GOVERN** | 1.1, 1.3, 1.4, 6.1 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — system purpose, harm categories, third-party components | — |
+| **MAP** | 1.1, 2.2, 5.1 | [`docs/risk-register.md`](docs/risk-register.md) — risk identification and mitigation status | — |
+| **MAP** | 1.1, 2.2 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — data flows and harm analysis | — |
+| **MEASURE** | 2.4 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — guardrail block rate monitoring | `make dashboard` |
+| **MEASURE** | 2.5 | [`compliance/hooks.py`](compliance/hooks.py) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — tool invocation audit trail | `make dashboard` |
+| **MANAGE** | 1.3, 2.2 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) — Bedrock Guardrails (PII redaction, prompt-injection defence, content filtering) | `make deploy` |
+| **MANAGE** | 2.4 | [`docs/risk-register.md`](docs/risk-register.md) + CloudWatch dashboard — incident tracking and audit trail | `make dashboard` |
+| **MANAGE** | 4.1 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — human oversight mechanisms | — |
+| **MEASURE** | 2.4, 2.5 (automated) | [`tests/unit/test_safety_boundaries.py`](tests/unit/test_safety_boundaries.py), [`compliance/promptfoo-redteam.yaml`](compliance/promptfoo-redteam.yaml) — red-team CI | `make redteam` |
+
+**Key compliance files:**
+
+- `docs/` — three governance documents (system card, risk register, governance charter)
+- `compliance/hooks.py` — `AuditLoggingHook` attaches to the Strands lifecycle and emits a JSONL audit record on every tool call
+- `deploy/guardrail.yaml` — Bedrock Guardrails policy applied to both the local REPL (`agent.py`) and the AgentCore cloud runtime (`deploy/app.py`)
+- `deploy/create_dashboard.py` — deploys the `NIST-RMF-AgentCompliance` CloudWatch dashboard; run `make dashboard` after deploying the agent
+
+---
+
 ## Project Structure
 
 ```
@@ -198,11 +239,22 @@ strands-agents-demo/
 │   ├── app.py            # Cloud runtime entrypoint (boto3 direct, no Strands SDK)
 │   ├── deploy.py         # Provisions S3, IAM role, AgentCore runtime (idempotent)
 │   ├── verify.py         # Post-deploy smoke test — invokes the live endpoint
-│   ├── teardown.py       # Deletes AgentCore runtime and IAM role
+│   ├── teardown.py       # Deletes AgentCore runtime, IAM role, and CloudWatch dashboard
+│   ├── guardrail.yaml    # Bedrock Guardrails policy — PII redaction, prompt-injection defence
+│   ├── create_dashboard.py  # CloudWatch NIST-RMF-AgentCompliance dashboard (idempotent)
 │   └── start.sh          # (unused locally) dependency install + launch for runtime
 │
+├── compliance/
+│   ├── hooks.py          # AuditLoggingHook — JSONL tool-call audit trail (NIST MEASURE-2.5)
+│   └── promptfoo-redteam.yaml  # Adversarial probe suite for red-team CI
+│
+├── docs/
+│   ├── ai-system-card.md    # System card — purpose, data flows, harm categories (GOVERN, MAP)
+│   ├── risk-register.md     # Risk register — identified risks and mitigations (MAP)
+│   └── governance-charter.md  # Governance charter — roles, risk tolerance, review cadence (GOVERN)
+│
 ├── tests/
-│   ├── unit/             # Unit tests for agent.py, app.py, verify.py
+│   ├── unit/             # Unit tests for agent.py, app.py, deploy scripts, compliance hooks
 │   ├── integration/      # Integration tests for the agentic tool-calling loop
 │   └── evals/            # Deterministic behavioural contract tests
 │
@@ -210,7 +262,7 @@ strands-agents-demo/
 │   ├── launch.json       # F5 debug config — loads .env automatically
 │   └── extensions.json   # Recommended VS Code extensions
 │
-├── Makefile              # Shortcuts: install, run, deploy, verify, test, lint
+├── Makefile              # Shortcuts: install, run, deploy, verify, test, lint, redteam, dashboard
 │
 ├── _bmad/                # BMAD framework core — agents, skills, workflows (not agent code)
 └── _bmad-output/         # BMAD planning artifacts (PRD, architecture, stories)
@@ -281,8 +333,10 @@ make install        # Create venv and install dependencies
 make run            # Run the agent locally (python agent.py)
 make deploy         # Deploy to AgentCore (python deploy/deploy.py)
 make verify         # Verify deployed agent (python deploy/verify.py)
-make teardown       # Delete AgentCore runtime and IAM role
-make test           # Run unit + integration + eval tests (43 tests)
+make teardown       # Delete AgentCore runtime, IAM role, and CloudWatch dashboard
+make dashboard      # Create/update CloudWatch NIST-RMF compliance dashboard
+make redteam        # Run promptfoo adversarial red-team scan (requires Node.js + AWS creds)
+make test           # Run unit + eval tests (134 tests)
 make test-unit      # Unit tests only
 make lint           # Check formatting with black (no changes made)
 make format         # Auto-format all Python files with black

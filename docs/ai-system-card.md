@@ -1,6 +1,6 @@
 # AI System Card — Age-in-Days Agent
 
-_NIST AI RMF Functions: GOVERN, MAP_
+_NIST AI RMF Functions: GOVERN, MAP, MEASURE, MANAGE_
 
 This document describes the AI system deployed in the strands-agents-demo project. It serves as the primary GOVERN and MAP artifact for the NIST AI Risk Management Framework compliance layer introduced in Epic 4.
 
@@ -64,6 +64,10 @@ _NIST AI RMF MAP-1.1: Deployment context and data handling._
 ```
 User keyboard input (date of birth in natural language)
   → Strands Agent REPL loop (agent.py)
+  │   ├── [NIST MEASURE-2.5] AuditLoggingHook fires on tool_call_start / tool_call_end
+  │   │     Emits JSONL record to strands_agent.audit logger (invocation_id, tool_name, args)
+  │   └── [NIST MANAGE-1.3] Bedrock Guardrails applied via guardrail_id in BedrockModel config
+  │         PII anonymisation, prompt-injection filter, content filter evaluated before inference
   → BedrockModel.converse() API call (HTTPS, encrypted in transit)
   → Amazon Bedrock (language model inference)
   → LLM decides to call get_today_date tool
@@ -71,7 +75,15 @@ User keyboard input (date of birth in natural language)
   → Tool result returned to LLM as context (ISO 8601 date string)
   → LLM computes age in days, composes natural language response
   → Response printed to terminal
+
+In AgentCore (cloud), the same compliance controls apply via deploy/app.py:
+  guardrail_id is passed to the Bedrock Converse API on every call.
+  AuditLoggingHook is registered identically in app.py.
 ```
+
+**Compliance controls in the data flow:**
+- `AuditLoggingHook` (`compliance/hooks.py`) — registered with the Strands `Agent()` in both `agent.py` and `deploy/app.py`. Fires `on_before_tool_call` and `on_after_tool_call`, writing structured JSONL to the `strands_agent.audit` Python logger. In AgentCore, this log stream is captured in CloudWatch and queryable via the `NIST-RMF-AgentCompliance` dashboard (`make dashboard`).
+- `Bedrock Guardrails` (`deploy/guardrail.yaml`) — applied at the `BedrockModel` level. Evaluates every prompt before it reaches the LLM. Configured controls: PROMPT_ATTACKS filter (HIGH strength), PII anonymisation (EMAIL, PHONE → ANONYMIZE), content filters (HATE, INSULTS, MISCONDUCT, SEXUAL — HIGH threshold).
 
 **Data persistence:** None. No user input, model output, or tool result is written to disk or any persistent store by the agent code. AWS AgentCore may capture invocation traces and logs in CloudWatch as part of its managed observability features (see AgentCore documentation for retention policies).
 
@@ -154,6 +166,7 @@ The system card version should be updated by adding a dated comment to the Chang
 | 2026-03-20 | Initial system card created as part of Epic 4, Story 4.1 | Paul |
 | 2026-03-21 | Updated guardrail references from future-tense to deployed; extended coverage notes to include `deploy/app.py` AgentCore runtime path (code review finding, Story 4.3) | Paul |
 | 2026-03-21 | Human Oversight section updated — NIST-RMF-AgentCompliance CloudWatch dashboard added as monitoring mechanism (Story 4.5) | Paul |
+| 2026-03-21 | Header subtitle updated to include MEASURE and MANAGE; data flow diagram expanded to show AuditLoggingHook and Bedrock Guardrails compliance layer | Paul |
 
 ---
 

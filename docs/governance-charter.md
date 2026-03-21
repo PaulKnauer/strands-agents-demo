@@ -111,7 +111,7 @@ The agent should be decommissioned (AgentCore runtime deleted, deployment artifa
 - A HIGH-rated risk is identified that cannot be mitigated within an acceptable timeframe
 - The underlying Strands SDK or AgentCore service reaches end-of-life and cannot be updated
 
-Decommissioning procedure: run `aws bedrock-agentcore delete-agent-runtime --agent-runtime-id <id>` or use the AgentCore console. Remove the endpoint URL from any documentation or shared configuration.
+Decommissioning procedure: run `make teardown` (or `python deploy/teardown.py`). This script performs four steps in order: deletes the AgentCore runtime, removes the IAM execution role, deletes the S3 deployment object, and deletes the `NIST-RMF-AgentCompliance` CloudWatch compliance dashboard. Alternatively, the AgentCore runtime can be removed manually via `aws bedrock-agentcore delete-agent-runtime --agent-runtime-id <id>` or the AgentCore console — but note that `make teardown` is the only path that also removes the CloudWatch dashboard. Remove the endpoint URL from any documentation or shared configuration after teardown completes.
 
 ---
 
@@ -120,6 +120,7 @@ Decommissioning procedure: run `aws bedrock-agentcore delete-agent-runtime --age
 | Date | Change | Author |
 |---|---|---|
 | 2026-03-20 | Initial governance charter created as part of Epic 4, Story 4.1 | Paul |
+| 2026-03-21 | Decommissioning section updated — `make teardown` now deletes CloudWatch compliance dashboard (Step 4/4); manual CLI path noted as incomplete without dashboard cleanup | Paul |
 
 ---
 
