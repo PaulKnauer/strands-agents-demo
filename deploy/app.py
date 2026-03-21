@@ -63,6 +63,17 @@ def _run_agent(prompt: str) -> str:
     # standard accounts without Marketplace subscription (sonnet requires it).
     model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
     region = os.environ.get("AWS_REGION", "us-east-1")
+    # Bedrock Guardrails are optional — only wired when GUARDRAIL_ID is configured.
+    # Mirrors the conditional kwargs pattern in agent.py.
+    # NIST MANAGE-2.2 / MANAGE-1.3: guardrails enforce content safety and PII
+    # anonymisation at the model layer for the deployed AgentCore runtime path.
+    guardrail_id = os.environ.get("GUARDRAIL_ID")
+    guardrail_version = os.environ.get("GUARDRAIL_VERSION", "DRAFT")
+    guardrail_config = (
+        {"guardrailIdentifier": guardrail_id, "guardrailVersion": guardrail_version}
+        if guardrail_id
+        else None
+    )
 
     bedrock = boto3.client("bedrock-runtime", region_name=region)
     messages = [{"role": "user", "content": [{"text": prompt}]}]
@@ -71,12 +82,15 @@ def _run_agent(prompt: str) -> str:
     # MAX_TURNS prevents infinite loops if the model misbehaves or a bad prompt
     # causes repeated tool calls without converging to end_turn.
     for _ in range(MAX_TURNS):
-        response = bedrock.converse(
+        converse_kwargs = dict(
             modelId=model_id,
             system=[{"text": SYSTEM_PROMPT}],
             messages=messages,
             toolConfig={"tools": TOOLS},
         )
+        if guardrail_config:
+            converse_kwargs["guardrailConfig"] = guardrail_config
+        response = bedrock.converse(**converse_kwargs)
 
         output_message = response["output"]["message"]
         messages.append(output_message)

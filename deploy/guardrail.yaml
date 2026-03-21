@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Bedrock Guardrail for strands-agents-demo.
+  Addresses NIST AI RMF MANAGE-2.2 (harmful content filtering),
+  GOVERN-1.1 (prompt injection defence), and MANAGE-1.3 (PII anonymisation).
+
+Resources:
+  StrandsDemoGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: strands-demo-guardrail
+      Description: >
+        Content safety and PII guardrail for the strands-agents-demo age-in-days agent.
+        Filters hate and violent content, blocks prompt-injection attacks, and anonymises
+        email and phone PII entities. Part of the NIST AI RMF Epic 4 compliance layer.
+
+      # Message shown to the user when their input is blocked by the guardrail.
+      # Kept generic to avoid leaking guardrail configuration details.
+      BlockedInputMessaging: "I cannot process that request."
+
+      # Message shown to the user when the model's output is blocked by the guardrail.
+      BlockedOutputsMessaging: "I cannot provide that response."
+
+      ContentPolicyConfig:
+        FiltersConfig:
+          # MANAGE-2.2: Block violent content at high confidence in both directions.
+          - Type: HATE
+            InputStrength: HIGH
+            OutputStrength: HIGH
+
+          # MANAGE-2.2: Block violent content at high confidence in both directions.
+          - Type: VIOLENCE
+            InputStrength: HIGH
+            OutputStrength: HIGH
+
+          # GOVERN-1.1: Detect and block prompt injection / jailbreak attempts on input.
+          # OutputStrength is NONE because the model's own output cannot be a prompt attack.
+          - Type: PROMPT_ATTACKS
+            InputStrength: HIGH
+            OutputStrength: NONE
+
+      SensitiveInformationPolicyConfig:
+        PiiEntitiesConfig:
+          # MANAGE-1.3: Anonymise email addresses rather than blocking — the agent can
+          # still respond helpfully while the sensitive value is redacted in the audit trail.
+          - Type: EMAIL
+            Action: ANONYMIZE
+
+          # MANAGE-1.3: Anonymise phone numbers for the same reason as EMAIL above.
+          - Type: PHONE
+            Action: ANONYMIZE
+
+Outputs:
+  GuardrailId:
+    Description: >
+      The unique identifier for the Bedrock Guardrail.
+      Set GUARDRAIL_ID to this value in your .env file to enable guardrail enforcement.
+    Value: !GetAtt StrandsDemoGuardrail.GuardrailId
+    Export:
+      Name: strands-demo-guardrail-id
+
+  GuardrailVersion:
+    Description: >
+      The version of the Bedrock Guardrail (use DRAFT for the latest unpublished version).
+      Set GUARDRAIL_VERSION to this value in your .env file.
+    Value: !GetAtt StrandsDemoGuardrail.Version
+    Export:
+      Name: strands-demo-guardrail-version

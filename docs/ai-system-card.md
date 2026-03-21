@@ -32,7 +32,7 @@ The following uses are explicitly out of scope for this reference implementation
 
 - **Medical or legal age determination.** The output of this agent must not be used as authoritative evidence in any medical, legal, or regulatory context. Date-of-birth calculations may have legal significance in age of majority, medical eligibility, or benefits determinations; this agent has not been assessed for those use cases.
 - **Identity verification.** The agent does not verify the identity of the user or the authenticity of the date of birth provided.
-- **Production PII handling without additional controls.** Users may inadvertently include personally identifiable information (e.g., a real date of birth) in their prompts. The agent has not been hardened for production environments where PII handling must meet regulatory requirements (GDPR, HIPAA, CCPA). Story 4.3 adds Bedrock Guardrails PII redaction as a mitigation.
+- **Production PII handling without additional controls.** Users may inadvertently include personally identifiable information (e.g., a real date of birth) in their prompts. The agent has not been hardened for production environments where PII handling must meet regulatory requirements (GDPR, HIPAA, CCPA). Bedrock Guardrails (deployed in Story 4.3) provide PII redaction as a mitigation for the local and deployed runtime paths.
 - **Multi-turn stateful conversations.** The agent does not maintain memory between sessions. Each invocation is stateless.
 - **High-volume or production workloads without performance assessment.** The demo configuration has not been load-tested or performance-profiled for production-scale traffic.
 
@@ -50,6 +50,7 @@ _NIST AI RMF GOVERN-6.1: Third-party and supply-chain risk management._
 | AWS AgentCore | Managed service (preview/GA) | Agent deployment runtime — session isolation, observability, identity | MEDIUM — newly GA service; API surface may evolve |
 | python-dotenv | `>=1.0.0` | Environment variable loading from `.env` file | LOW — stable, widely-used library |
 | boto3 | `>=1.34.0` | AWS SDK — used by BedrockModel and deployment script | LOW — AWS first-party SDK |
+| Amazon Bedrock Guardrails | Managed service (deployed via `deploy/guardrail.yaml`) | Content safety filtering, prompt-injection defence, and PII anonymisation — NIST MANAGE-2.2 / GOVERN-1.1 / MANAGE-1.3 | LOW — AWS managed; policy configuration is version-controlled in `deploy/guardrail.yaml` |
 | Google Gemini (optional) | Fallback via `strands-agents[gemini]` | Alternative LLM provider if Bedrock is unavailable | LOW — optional; not installed in default configuration |
 
 **Note on versions:** This system card documents component versions at the time of Epic 4 implementation (2026-03-20). The Third-Party Components section must be updated whenever a dependency is upgraded, a new component is added, or a component is removed. See Review Cadence.
@@ -79,7 +80,7 @@ User keyboard input (date of birth in natural language)
 - Printed to the terminal as part of the agent's response
 - Not stored or logged by the agent code itself
 
-Story 4.3 (Bedrock Guardrails) adds PII detection and redaction as an additional control layer.
+Bedrock Guardrails (deployed in Story 4.3) provide PII detection and redaction as an additional control layer for both the local REPL and the deployed AgentCore runtime.
 
 **External network calls:** The agent makes one external HTTPS call per conversation turn — to the Amazon Bedrock endpoint in the configured AWS region. No other external services are contacted during normal operation.
 
@@ -93,15 +94,15 @@ The following table maps NIST AI 600-1 risk categories to this agent's specific 
 
 | ID | Harm Category | NIST AI 600-1 Risk | Likelihood | Impact | Notes |
 |---|---|---|---|---|---|
-| H-1 | Prompt injection | Prompt Injection | LOW | LOW | Narrow tool surface (one deterministic tool); no external data retrieval or write operations. Bedrock Guardrails PROMPT_ATTACK filter planned in Story 4.3. |
+| H-1 | Prompt injection | Prompt Injection | LOW | LOW | Narrow tool surface (one deterministic tool); no external data retrieval or write operations. Bedrock Guardrails PROMPT_ATTACK filter deployed (Story 4.3) on both local and AgentCore runtime paths. |
 | H-2 | Hallucinated date output | Confabulation / Hallucination | LOW | LOW | System prompt explicitly instructs the agent to call `get_today_date` before calculating. The calculation is verifiable by the user. |
-| H-3 | Harmful or offensive content | Harmful Content Generation | LOW | LOW | The agent's task is date arithmetic; it has no natural surface for generating harmful content. Content filters planned in Story 4.3. |
-| H-4 | PII exposure in prompts | Data Privacy | LOW | MEDIUM | Users may provide a real date of birth. This is sent to Bedrock for inference. No PII is stored by agent code; PII redaction planned in Story 4.3. |
+| H-3 | Harmful or offensive content | Harmful Content Generation | LOW | LOW | The agent's task is date arithmetic; it has no natural surface for generating harmful content. Content filters deployed (Story 4.3) on both local and AgentCore runtime paths. |
+| H-4 | PII exposure in prompts | Data Privacy | LOW | MEDIUM | Users may provide a real date of birth. This is sent to Bedrock for inference. No PII is stored by agent code; PII redaction deployed (Story 4.3) on both local and AgentCore runtime paths. |
 | H-5 | Incorrect age calculation | Output Quality | LOW | LOW | Date arithmetic is deterministic once "today" is fixed by the tool. Incorrect output is immediately verifiable by the user. Unit tests cover `get_today_date` and REPL logic. |
 | H-6 | Model provider dependency | System Reliability | MEDIUM | MEDIUM | If Amazon Bedrock is unavailable, the agent cannot respond. Mitigation: multi-provider switching (Bedrock → Gemini) via env vars. |
 | H-7 | Supply-chain compromise | Data Poisoning / Supply Chain | LOW | LOW | Pinned dependency versions in `requirements.txt`; standard Python package supply-chain risk. No training data interaction at inference time. |
 
-**Residual risk summary:** All identified risks are LOW or MEDIUM likelihood. No HIGH-likelihood or HIGH-impact risk categories have been identified for this agent in its intended use context. The most significant residual risk is H-4 (PII exposure), addressed in Story 4.3.
+**Residual risk summary:** All identified risks are LOW or MEDIUM likelihood. No HIGH-likelihood or HIGH-impact risk categories have been identified for this agent in its intended use context. H-4 (PII exposure) and H-1 (prompt injection) are mitigated by Bedrock Guardrails deployed in Story 4.3 across both runtime paths (`agent.py` and `deploy/app.py`).
 
 ---
 
@@ -150,6 +151,7 @@ The system card version should be updated by adding a dated comment to the Chang
 | Date | Change | Author |
 |---|---|---|
 | 2026-03-20 | Initial system card created as part of Epic 4, Story 4.1 | Paul |
+| 2026-03-21 | Updated guardrail references from future-tense to deployed; extended coverage notes to include `deploy/app.py` AgentCore runtime path (code review finding, Story 4.3) | Paul |
 
 ---
 

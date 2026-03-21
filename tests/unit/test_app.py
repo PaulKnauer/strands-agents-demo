@@ -1,5 +1,6 @@
 """Unit tests for deploy/app.py — agentic loop, tool dispatch, entrypoint."""
 
+import os
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -140,6 +141,68 @@ class TestRunAgent:
 
         call_messages = mock_bedrock.converse.call_args[1]["messages"]
         assert call_messages[0]["content"][0]["text"] == ""
+
+
+# ── guardrail wiring (deployed runtime path) ──────────────────────────────────
+
+
+class TestRunAgentGuardrails:
+    """Verify that _run_agent wires GUARDRAIL_ID/VERSION into converse() — AC #11."""
+
+    @patch("deploy.app.boto3.client")
+    def test_guardrail_config_passed_when_guardrail_id_set(self, mock_client):
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
+
+        with patch.dict(os.environ, {"GUARDRAIL_ID": "gr-123", "GUARDRAIL_VERSION": "2"}):
+            _run_agent("born 1 Jan 2020")
+
+        kwargs = mock_bedrock.converse.call_args.kwargs
+        assert "guardrailConfig" in kwargs
+        assert kwargs["guardrailConfig"]["guardrailIdentifier"] == "gr-123"
+        assert kwargs["guardrailConfig"]["guardrailVersion"] == "2"
+
+    @patch("deploy.app.boto3.client")
+    def test_guardrail_config_absent_when_guardrail_id_not_set(self, mock_client):
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
+
+        with patch.dict(os.environ, {"MODEL_ID": "haiku", "AWS_REGION": "us-east-1"}, clear=True):
+            _run_agent("born 1 Jan 2020")
+
+        kwargs = mock_bedrock.converse.call_args.kwargs
+        assert "guardrailConfig" not in kwargs
+
+    @patch("deploy.app.boto3.client")
+    def test_guardrail_version_defaults_to_draft_when_unset(self, mock_client):
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
+
+        with patch.dict(os.environ, {"GUARDRAIL_ID": "gr-456"}):
+            os.environ.pop("GUARDRAIL_VERSION", None)
+            _run_agent("born 1 Jan 2020")
+
+        kwargs = mock_bedrock.converse.call_args.kwargs
+        assert kwargs["guardrailConfig"]["guardrailVersion"] == "DRAFT"
+
+    @patch("deploy.app.boto3.client")
+    def test_guardrail_config_applied_on_every_converse_turn(self, mock_client):
+        """Guardrail config must be present on all turns including tool-use loops."""
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.side_effect = [
+            _tool_use("tu-001"),
+            _end_turn("Done."),
+        ]
+
+        with patch.dict(os.environ, {"GUARDRAIL_ID": "gr-789", "GUARDRAIL_VERSION": "1"}):
+            _run_agent("born 1 Jan 2020")
+
+        for call in mock_bedrock.converse.call_args_list:
+            assert "guardrailConfig" in call.kwargs
 
 
 # ── handle_invocation ─────────────────────────────────────────────────────────

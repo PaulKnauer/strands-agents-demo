@@ -3,6 +3,7 @@
 import os
 import datetime
 
+from compliance.hooks import AuditLoggingHook
 from dotenv import load_dotenv
 from strands import Agent, tool
 from strands.models import BedrockModel
@@ -45,14 +46,31 @@ def create_agent():
     elif provider == "bedrock":
         # BedrockModel uses the default boto3 credential chain —
         # no explicit credential passing needed
+        # Bedrock Guardrails are optional — only wired when GUARDRAIL_ID is configured.
+        # When absent the agent runs without content filtering (suitable for local dev).
+        # NIST MANAGE-2.2 / MANAGE-1.3: guardrails enforce content safety and PII
+        # anonymisation at the model layer with zero enforcement logic in application code.
+        guardrail_kwargs = {}
+        if guardrail_id := os.environ.get("GUARDRAIL_ID"):
+            guardrail_kwargs = {
+                "guardrail_id": guardrail_id,
+                "guardrail_version": os.environ.get("GUARDRAIL_VERSION", "DRAFT"),
+            }
         model = BedrockModel(
-            model_id=os.environ["MODEL_ID"], region_name=os.environ["AWS_REGION"]
+            model_id=os.environ["MODEL_ID"],
+            region_name=os.environ["AWS_REGION"],
+            **guardrail_kwargs,
         )
     else:
         raise ValueError(
             f"Unknown MODEL_PROVIDER: '{provider}'. Expected 'bedrock' or 'gemini'."
         )
-    return Agent(model=model, tools=[get_today_date], system_prompt=SYSTEM_PROMPT)
+    return Agent(
+        model=model,
+        tools=[get_today_date],
+        system_prompt=SYSTEM_PROMPT,
+        hooks=[AuditLoggingHook()],
+    )
 
 
 def run_repl(agent) -> None:

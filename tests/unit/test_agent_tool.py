@@ -49,15 +49,85 @@ class TestCreateAgent:
                     "MODEL_ID": "some-model",
                     "AWS_REGION": "us-east-1",
                 },
+                clear=True,
             ),
             patch("agent.BedrockModel") as mock_bedrock_cls,
             patch("agent.Agent") as mock_agent_cls,
         ):
+            # Ensure GUARDRAIL_ID is absent so no guardrail kwargs are passed (AC #4)
+            os.environ.pop("GUARDRAIL_ID", None)
             create_agent()
-            mock_bedrock_cls.assert_called_once_with(
-                model_id="some-model", region_name="us-east-1"
-            )
+            kwargs = mock_bedrock_cls.call_args.kwargs
+            assert kwargs["model_id"] == "some-model"
+            assert kwargs["region_name"] == "us-east-1"
+            assert "guardrail_id" not in kwargs
+            assert "guardrail_version" not in kwargs
             mock_agent_cls.assert_called_once()
+
+    def test_bedrock_with_guardrail_id_passes_guardrail_kwargs(self):
+        from agent import create_agent
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_PROVIDER": "bedrock",
+                    "MODEL_ID": "some-model",
+                    "AWS_REGION": "us-east-1",
+                    "GUARDRAIL_ID": "test-guardrail-id",
+                    "GUARDRAIL_VERSION": "1",
+                },
+            ),
+            patch("agent.BedrockModel") as mock_bedrock_cls,
+            patch("agent.Agent"),
+        ):
+            create_agent()
+            kwargs = mock_bedrock_cls.call_args.kwargs
+            assert kwargs["guardrail_id"] == "test-guardrail-id"
+            assert kwargs["guardrail_version"] == "1"
+
+    def test_bedrock_without_guardrail_id_omits_guardrail_kwargs(self):
+        from agent import create_agent
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_PROVIDER": "bedrock",
+                    "MODEL_ID": "some-model",
+                    "AWS_REGION": "us-east-1",
+                },
+                clear=True,
+            ),
+            patch("agent.BedrockModel") as mock_bedrock_cls,
+            patch("agent.Agent"),
+        ):
+            os.environ.pop("GUARDRAIL_ID", None)
+            create_agent()
+            kwargs = mock_bedrock_cls.call_args.kwargs
+            assert "guardrail_id" not in kwargs
+            assert "guardrail_version" not in kwargs
+
+    def test_bedrock_guardrail_version_defaults_to_draft_when_unset(self):
+        from agent import create_agent
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_PROVIDER": "bedrock",
+                    "MODEL_ID": "some-model",
+                    "AWS_REGION": "us-east-1",
+                    "GUARDRAIL_ID": "gid-123",
+                },
+            ),
+            patch("agent.BedrockModel") as mock_bedrock_cls,
+            patch("agent.Agent"),
+        ):
+            os.environ.pop("GUARDRAIL_VERSION", None)
+            create_agent()
+            kwargs = mock_bedrock_cls.call_args.kwargs
+            assert kwargs["guardrail_version"] == "DRAFT"
 
     def test_gemini_provider_constructs_gemini_model(self):
         from agent import create_agent
@@ -81,6 +151,31 @@ class TestCreateAgent:
             create_agent()
             mock_gemini_cls.assert_called_once_with(model_id="gemini-pro")
             mock_agent_cls.assert_called_once()
+
+    def test_gemini_provider_ignores_guardrail_env_var(self):
+        from agent import create_agent
+
+        mock_gemini_cls = MagicMock()
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_PROVIDER": "gemini",
+                    "MODEL_ID": "gemini-pro",
+                    "AWS_REGION": "us-east-1",
+                    "GUARDRAIL_ID": "should-be-ignored",
+                    "GUARDRAIL_VERSION": "1",
+                },
+            ),
+            patch.dict(
+                "sys.modules",
+                {"strands.models.gemini": MagicMock(GeminiModel=mock_gemini_cls)},
+            ),
+            patch("agent.Agent"),
+        ):
+            create_agent()
+            # GeminiModel must be called with model_id only — no guardrail kwargs
+            mock_gemini_cls.assert_called_once_with(model_id="gemini-pro")
 
 
 class TestRunRepl:
