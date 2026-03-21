@@ -28,6 +28,7 @@ help:
 	@echo "    make verify       Invoke deployed agent and verify response"
 	@echo "    make teardown     Remove all AWS resources created by deploy"
 	@echo "    make redteam      Run promptfoo red-team scan (requires Node.js + AWS creds)"
+	@echo "    make dashboard    Create/update CloudWatch NIST-RMF compliance dashboard"
 	@echo ""
 	@echo "  Housekeeping"
 	@echo "    make clean        Remove venv and compiled Python files"
@@ -60,11 +61,11 @@ run:
 
 .PHONY: format
 format:
-	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py
+	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py
 
 .PHONY: lint
 lint:
-	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py
+	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py
 
 .PHONY: test-unit
 test-unit:
@@ -98,6 +99,10 @@ teardown:
 .PHONY: redteam
 redteam:
 	npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
+
+.PHONY: dashboard
+dashboard:
+	$(PYTHON) deploy/create_dashboard.py
 
 # ── Housekeeping ─────────────────────────────────────────────────────────────
 

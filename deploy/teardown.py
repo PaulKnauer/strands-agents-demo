@@ -7,6 +7,8 @@ import boto3
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
+from deploy.create_dashboard import NIST_RMF_DASHBOARD_NAME
+
 load_dotenv()
 
 
@@ -24,8 +26,12 @@ def main() -> None:
     agent_name = agent_name_raw.replace("-", "_")
     role_name = f"AmazonBedrockAgentCoreRuntime_{agent_name}"
 
-    print(f"\n🗑️  Tearing down AgentCore resources for '{agent_name}' in {aws_region}...")
-    print("   This will delete: AgentCore runtime, IAM role, S3 deployment object.\n")
+    print(
+        f"\n🗑️  Tearing down AgentCore resources for '{agent_name}' in {aws_region}..."
+    )
+    print(
+        "   This will delete: AgentCore runtime, IAM role, S3 deployment object, CloudWatch dashboard.\n"
+    )
 
     sts = boto3.client("sts", region_name=aws_region)
     try:
@@ -42,7 +48,7 @@ def main() -> None:
     s3 = boto3.client("s3", region_name=aws_region)
 
     # ── Step 1: Delete AgentCore runtime ─────────────────────────────────────
-    print("Step 1/3: Deleting AgentCore runtime...")
+    print("Step 1/4: Deleting AgentCore runtime...")
     try:
         # Find the runtime ID by name (no server-side name filter — must scan)
         runtime_id = None
@@ -69,7 +75,7 @@ def main() -> None:
         print(f"  ⚠️  Could not delete AgentCore runtime: {e}")
 
     # ── Step 2: Delete IAM role ───────────────────────────────────────────────
-    print("\nStep 2/3: Deleting IAM role...")
+    print("\nStep 2/4: Deleting IAM role...")
     try:
         # Must delete all inline policies before the role itself can be deleted
         iam.delete_role_policy(
@@ -93,7 +99,7 @@ def main() -> None:
     # ── Step 3: Delete S3 deployment artefact ────────────────────────────────
     # The bucket (bedrock-agentcore-code-*) is shared across AgentCore deployments
     # so we only remove this agent's object, not the bucket itself.
-    print("\nStep 3/3: Deleting S3 deployment object...")
+    print("\nStep 3/4: Deleting S3 deployment object...")
     try:
         s3.delete_object(Bucket=s3_bucket, Key=s3_key)
         print(f"  ✅ Deleted s3://{s3_bucket}/{s3_key}")
@@ -104,6 +110,21 @@ def main() -> None:
             print(f"  ℹ️  S3 object not found — skipping.")
         else:
             print(f"  ⚠️  Could not delete S3 object: {e}")
+
+    # ── Step 4: Delete CloudWatch compliance dashboard ────────────────────────────
+    print("\nStep 4/4: Deleting CloudWatch compliance dashboard...")
+    cw = boto3.client("cloudwatch", region_name=aws_region)
+    try:
+        cw.delete_dashboards(DashboardNames=[NIST_RMF_DASHBOARD_NAME])
+        print(f"  ✅ Deleted CloudWatch dashboard: {NIST_RMF_DASHBOARD_NAME}")
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code == "ResourceNotFound":
+            print(
+                f"  ℹ️  CloudWatch dashboard '{NIST_RMF_DASHBOARD_NAME}' not found — skipping."
+            )
+        else:
+            print(f"  ⚠️  Could not delete CloudWatch dashboard: {e}")
 
     print("\n✅ Teardown complete.")
 

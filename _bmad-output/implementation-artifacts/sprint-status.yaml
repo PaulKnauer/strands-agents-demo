@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-03-16
-last_updated: 2026-03-21
+last_updated: 2026-03-21  # story 4-5 moved to review
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -69,5 +69,5 @@ development_status:
   4-2-audit-hooks: done
   4-3-bedrock-guardrails: done
   4-4-red-team-ci: done
-  4-5-compliance-dashboard: backlog
+  4-5-compliance-dashboard: done
   epic-4-retrospective: optional

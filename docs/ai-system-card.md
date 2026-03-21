@@ -126,6 +126,7 @@ The agent's output is a single numeric value (age in days) derived from a date o
 2. **Correction mechanism.** The user can immediately correct the agent by providing a different date or reformatting an ambiguous input. The agent handles clarification requests gracefully.
 3. **Operator override.** The agent can be stopped at any time by typing `exit`, `quit`, or `q` in the REPL. When deployed via AgentCore, the runtime can be paused or decommissioned via the AWS console or CLI.
 4. **No autonomous actions.** The agent does not take actions on behalf of the user beyond returning a text response. It cannot write files, call external APIs, or modify system state. Human intervention is never required to prevent an autonomous action.
+5. **Runtime monitoring dashboard.** The `NIST-RMF-AgentCompliance` CloudWatch dashboard (deployed via `make dashboard`, see `deploy/create_dashboard.py`) provides operators with a real-time view of guardrail block rates and tool invocation audit events — satisfying NIST AI RMF MANAGE-2.4 (incident tracking) and MEASURE-2.5 (runtime monitoring).
 
 ---
 
@@ -152,9 +153,10 @@ The system card version should be updated by adding a dated comment to the Chang
 |---|---|---|
 | 2026-03-20 | Initial system card created as part of Epic 4, Story 4.1 | Paul |
 | 2026-03-21 | Updated guardrail references from future-tense to deployed; extended coverage notes to include `deploy/app.py` AgentCore runtime path (code review finding, Story 4.3) | Paul |
+| 2026-03-21 | Human Oversight section updated — NIST-RMF-AgentCompliance CloudWatch dashboard added as monitoring mechanism (Story 4.5) | Paul |
 
 ---
 
-_This document supports NIST AI RMF functions **GOVERN** (subcategories 1.1, 1.3, 1.4, 6.1) and **MAP** (subcategories 1.1, 2.2)._
+_This document supports NIST AI RMF functions **GOVERN** (subcategories 1.1, 1.3, 1.4, 6.1), **MAP** (subcategories 1.1, 2.2), and **MANAGE** (subcategory 4.1 — human oversight mechanism)._
 
 _Reference: NIST AI 100-1 (AI RMF 1.0), NIST AI 600-1 (Generative AI Profile, July 2024)._
