@@ -184,6 +184,10 @@ class TestPromptfooConfig:
         Path(__file__).parent.parent.parent / "compliance" / "promptfoo-redteam.yaml"
     )
 
+    def _load_config(self) -> dict:
+        with self._PROMPTFOO_CONFIG.open() as f:
+            return yaml.safe_load(f)
+
     def test_promptfoo_system_prompt_matches_agent(self):
         """compliance/promptfoo-redteam.yaml defaultTest.options.systemPrompt must equal agent.SYSTEM_PROMPT.
 
@@ -193,13 +197,33 @@ class TestPromptfooConfig:
         """
         from agent import SYSTEM_PROMPT
 
-        with self._PROMPTFOO_CONFIG.open() as f:
-            config = yaml.safe_load(f)
-
+        config = self._load_config()
         promptfoo_prompt = config["defaultTest"]["options"]["systemPrompt"].strip()
 
         assert promptfoo_prompt == SYSTEM_PROMPT, (
             "compliance/promptfoo-redteam.yaml defaultTest.options.systemPrompt has "
             "drifted from agent.SYSTEM_PROMPT. Update the YAML to match agent.py so "
             "that the red-team suite probes the current safety contract."
+        )
+
+    def test_promptfoo_config_avoids_removed_prompt_injection_identifiers(self):
+        """Promptfoo config must avoid removed prompt-injection ids that break scheduled CI.
+
+        Promptfoo 0.121.2 rejects the legacy `prompt-injection` plugin id. Keep
+        the config on current identifiers so the scheduled red-team workflow
+        continues to run on GitHub-hosted runners.
+        """
+        config = self._load_config()
+        plugins = config["redteam"]["plugins"]
+        strategies = config["redteam"]["strategies"]
+
+        assert "prompt-injection" not in plugins, (
+            "compliance/promptfoo-redteam.yaml still uses the removed "
+            "`prompt-injection` redteam plugin id. Use a current built-in plugin "
+            "such as `hijacking` instead."
+        )
+        assert "prompt-injection" not in strategies, (
+            "compliance/promptfoo-redteam.yaml still uses the removed "
+            "`prompt-injection` strategy id. Use the current "
+            "`jailbreak-templates` strategy instead."
         )

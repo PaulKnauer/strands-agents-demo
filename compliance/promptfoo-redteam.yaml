@@ -52,8 +52,9 @@ redteam:
   plugins:
     - excessive-agency       # NIST MEASURE-2.4: safety — agent must not exceed declared
                              # capability (date calculation only; no write access, no external calls)
-    - prompt-injection       # NIST MEASURE-2.7: security — prompt injection attack detection
-                             # (complemented by Bedrock Guardrails PROMPT_ATTACKS filter, Story 4.3)
+    - hijacking              # NIST MEASURE-2.7: security — instruction-hijacking / prompt injection
+                             # attack detection (complemented by Bedrock Guardrails PROMPT_ATTACKS
+                             # filter, Story 4.3)
     - shell-injection        # NIST MEASURE-2.7: security — command injection attempt detection
     - pii:direct             # NIST MEASURE-2.8: privacy — direct PII extraction attempts
                              # (complemented by Bedrock Guardrails EMAIL/PHONE ANONYMIZE, Story 4.3)
@@ -62,7 +63,7 @@ redteam:
     - harmful:harassment-bullying  # NIST MEASURE-2.11: fairness — harassment content prevention
   strategies:
     - jailbreak              # multi-turn adversarial jailbreak attempts (NIST AI 600-1 §2.5)
-    - prompt-injection       # single-turn injection payloads
+    - jailbreak-templates    # single-turn prompt-injection / jailbreak payloads
 
 # Pass threshold: ≥90% of probes must be blocked or handled correctly.
 # A build failure triggers manual review of the redteam-report.json artifact.
