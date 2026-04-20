@@ -8,6 +8,7 @@ import yaml
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 REDTEAM_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "redteam.yml"
 GITHUB_ACTIONS_STACK = PROJECT_ROOT / "infra" / "github_actions_stack.py"
+PROMPTFOO_CONFIG = PROJECT_ROOT / "compliance" / "promptfoo-redteam.yaml"
 
 
 class TestRedteamWorkflowCredentials:
@@ -35,10 +36,27 @@ class TestRedteamWorkflowCredentials:
         assert legacy_key_secret not in content
         assert legacy_secret_key_secret not in content
 
+    def test_workflow_does_not_deploy_or_invoke_agentcore(self):
+        content = self._content().lower()
+        assert "make deploy" not in content
+        assert "deploy/deploy.py" not in content
+        assert "deploy/verify.py" not in content
+        assert "bedrock-agentcore" not in content
+
     def test_missing_role_secret_still_uploads_evidence_artifact(self):
         content = self._content()
         assert "Missing AWS_ROLE_TO_ASSUME secret" in content
         assert "compliance/redteam-report.json" in content
+
+    def test_promptfoo_targets_bedrock_directly_not_agentcore(self):
+        with PROMPTFOO_CONFIG.open() as f:
+            config = yaml.safe_load(f)
+
+        target_ids = [target["id"] for target in config["targets"]]
+        assert target_ids == ["bedrock:anthropic.claude-3-haiku-20240307-v1:0"]
+        content = PROMPTFOO_CONFIG.read_text().lower()
+        assert "bedrock-agentcore" not in content
+        assert "runtimes/" not in content
 
 
 class TestGithubActionsCdkStack:

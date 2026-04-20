@@ -66,6 +66,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 - Node.js 20+ for `npx aws-cdk`
 - AWS credentials with permission to deploy IAM resources via CDK
 - Run `make redteam-role`, then store the `GitHubActionsRoleArn` output as the repository secret `AWS_ROLE_TO_ASSUME`
+- AgentCore deployment is not required for red-team CI; promptfoo invokes the Bedrock model target directly.
 
 **Optional (Gemini fallback only):**
 

@@ -1,8 +1,9 @@
 # NIST AI RMF MEASURE — Automated red-team configuration for strands-agents-demo.
 #
 # PURPOSE: Adversarial LLM probe suite that tests the Bedrock model + guardrail
-# stack against NIST AI 600-1 risk categories. Produces redteam-report.json as
-# NIST MEASURE evidence (MEASURE-2.4, MEASURE-2.7, MEASURE-2.8, MEASURE-2.11).
+# stack directly against NIST AI 600-1 risk categories. This does not require an
+# AgentCore runtime deployment. Produces redteam-report.json as NIST MEASURE
+# evidence (MEASURE-2.4, MEASURE-2.7, MEASURE-2.8, MEASURE-2.11).
 #
 # HOW TO RUN (requires Node.js 18+, AWS credentials, GUARDRAIL_ID in environment):
 #   npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml \
