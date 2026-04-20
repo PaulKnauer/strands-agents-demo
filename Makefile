@@ -24,10 +24,13 @@ help:
 	@echo "    make test-evals-live  Run all evals including live LLM"
 	@echo ""
 	@echo "  Deployment"
+	@echo "    make guardrail    Create/update Bedrock Guardrail stack and print outputs"
+	@echo "    make redteam-role Deploy GitHub Actions OIDC role for scheduled red-team CI"
 	@echo "    make deploy       Deploy agent to AWS AgentCore"
 	@echo "    make verify       Invoke deployed agent and verify response"
 	@echo "    make teardown     Remove all AWS resources created by deploy"
-	@echo "    make redteam      Run promptfoo red-team scan (requires Node.js + AWS creds)"
+	@echo "    make teardown-redteam-role  Remove GitHub Actions OIDC role stack"
+	@echo "    make redteam      Run promptfoo red-team scan (requires Node.js + AWS auth)"
 	@echo "    make dashboard    Create/update CloudWatch NIST-RMF compliance dashboard"
 	@echo ""
 	@echo "  Housekeeping"
@@ -61,11 +64,11 @@ run:
 
 .PHONY: format
 format:
-	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py
+	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/github_actions_stack.py
 
 .PHONY: lint
 lint:
-	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py
+	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/github_actions_stack.py
 
 .PHONY: test-unit
 test-unit:
@@ -83,6 +86,21 @@ test-evals-live:
 test: test-unit test-evals
 
 # ── Deployment ───────────────────────────────────────────────────────────────
+
+.PHONY: guardrail
+guardrail:
+	aws cloudformation deploy --template-file deploy/guardrail.yaml --stack-name strands-demo-guardrail --region $${AWS_REGION:-us-east-1}
+	aws cloudformation describe-stacks --stack-name strands-demo-guardrail --region $${AWS_REGION:-us-east-1} --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output table
+
+.PHONY: redteam-role
+redteam-role:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 deploy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --require-approval never
+
+.PHONY: teardown-redteam-role
+teardown-redteam-role:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 destroy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --force
 
 .PHONY: deploy
 deploy:
@@ -109,6 +127,7 @@ dashboard:
 .PHONY: clean
 clean:
 	rm -rf venv
+	rm -rf cdk.out
 	find . -type d -name __pycache__ -not -path './_bmad/*' -not -path './.claude/*' -exec rm -rf {} +
 	find . -name '*.pyc' -not -path './_bmad/*' -not -path './.claude/*' -delete
 	@echo "  ✅ Cleaned venv and compiled Python files."

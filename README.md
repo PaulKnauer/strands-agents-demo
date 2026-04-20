@@ -50,11 +50,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 - AWS account with Amazon Bedrock enabled
 - Bedrock model access granted for **`anthropic.claude-3-haiku-20240307-v1:0`** in `us-east-1`
   _(Console → Amazon Bedrock → Model access → Request access)_
-- AWS credentials configured — either `aws configure` (CLI) or environment variables:
-  ```bash
-  export AWS_ACCESS_KEY_ID=...
-  export AWS_SECRET_ACCESS_KEY=...
-  ```
+- AWS credentials configured locally via the AWS CLI, IAM Identity Center, or another standard AWS SDK credential provider.
 
 **Additional requirements for AgentCore deployment:**
 
@@ -64,6 +60,12 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
   - `s3:CreateBucket`, `s3:PutObject`, `s3:HeadBucket`, `s3:PutEncryptionConfiguration`
   - `iam:CreateRole`, `iam:GetRole`, `iam:PutRolePolicy`
   - `sts:GetCallerIdentity`
+
+**Additional requirements for scheduled red-team CI:**
+
+- Node.js 20+ for `npx aws-cdk`
+- AWS credentials with permission to deploy IAM resources via CDK
+- Run `make redteam-role`, then store the `GitHubActionsRoleArn` output as the repository secret `AWS_ROLE_TO_ASSUME`
 
 **Optional (Gemini fallback only):**
 
@@ -209,6 +211,7 @@ Epic 4 of this project implements a complete [NIST AI Risk Management Framework 
 | **MAP** | 1.1, 2.2 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — data flows and harm analysis | — |
 | **MEASURE** | 2.4 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — guardrail block rate monitoring | `make dashboard` |
 | **MEASURE** | 2.5 | [`compliance/hooks.py`](compliance/hooks.py) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — tool invocation audit trail | `make dashboard` |
+| **MEASURE** | 2.7 | [`infra/github_actions_stack.py`](infra/github_actions_stack.py) + [`.github/workflows/redteam.yml`](.github/workflows/redteam.yml) — short-lived GitHub OIDC credentials for red-team CI | `make redteam-role` |
 | **MANAGE** | 1.3, 2.2 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) — Bedrock Guardrails (PII redaction, prompt-injection defence, content filtering) | `make deploy` |
 | **MANAGE** | 2.4 | [`docs/risk-register.md`](docs/risk-register.md) + CloudWatch dashboard — incident tracking and audit trail | `make dashboard` |
 | **MANAGE** | 4.1 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — human oversight mechanisms | — |
@@ -220,6 +223,7 @@ Epic 4 of this project implements a complete [NIST AI Risk Management Framework 
 - `compliance/hooks.py` — `AuditLoggingHook` attaches to the Strands lifecycle and emits a JSONL audit record on every tool call
 - `deploy/guardrail.yaml` — Bedrock Guardrails policy applied to both the local REPL (`agent.py`) and the AgentCore cloud runtime (`deploy/app.py`)
 - `deploy/create_dashboard.py` — deploys the `NIST-RMF-AgentCompliance` CloudWatch dashboard; run `make dashboard` after deploying the agent
+- `infra/` — AWS CDK stack for GitHub Actions OIDC and least-privilege Bedrock red-team permissions
 
 ---
 
@@ -331,11 +335,13 @@ GOOGLE_API_KEY=your-key-here
 ```bash
 make install        # Create venv and install dependencies
 make run            # Run the agent locally (python agent.py)
+make redteam-role   # Deploy GitHub Actions OIDC role for scheduled red-team CI
 make deploy         # Deploy to AgentCore (python deploy/deploy.py)
 make verify         # Verify deployed agent (python deploy/verify.py)
 make teardown       # Delete AgentCore runtime, IAM role, and CloudWatch dashboard
+make teardown-redteam-role  # Destroy the GitHub Actions OIDC role stack
 make dashboard      # Create/update CloudWatch NIST-RMF compliance dashboard
-make redteam        # Run promptfoo adversarial red-team scan (requires Node.js + AWS creds)
+make redteam        # Run promptfoo adversarial red-team scan
 make test           # Run unit + eval tests (134 tests)
 make test-unit      # Unit tests only
 make lint           # Check formatting with black (no changes made)
@@ -349,6 +355,17 @@ make format         # Auto-format all Python files with black
 **`AccessDeniedException` during deployment**
 
 Your IAM user is missing permissions. Check the [Prerequisites](#prerequisites) section for the required policy actions. See the [AgentCore permissions guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html).
+
+**Scheduled Redteam workflow fails with `Missing AWS_ROLE_TO_ASSUME secret`**
+
+Deploy the GitHub Actions OIDC role and store its ARN in GitHub Secrets:
+
+```bash
+make redteam-role
+gh secret set AWS_ROLE_TO_ASSUME --repo PaulKnauer/strands-agents-demo --body <GitHubActionsRoleArn>
+```
+
+The workflow uses GitHub OIDC and short-lived AWS credentials. It does not require long-lived AWS access key repository secrets.
 
 **`ResourceNotFoundException` — wrong region**
 

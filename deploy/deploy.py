@@ -264,8 +264,9 @@ def _handle_client_error(e: ClientError, context: str) -> None:
         )
     elif code in ("InvalidClientTokenId", "ExpiredTokenException"):
         print("   Hint: AWS credentials are invalid or expired.")
-        print("   Ensure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set, or")
-        print("   configure ~/.aws/credentials with valid credentials.")
+        print(
+            "   Refresh your AWS CLI, IAM Identity Center, or other standard AWS SDK credentials."
+        )
     elif code == "InvalidParameterException":
         print(
             "   Hint: A parameter value is invalid. Check AGENT_NAME (letters/digits/underscores"

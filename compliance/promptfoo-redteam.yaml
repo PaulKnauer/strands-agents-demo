@@ -11,7 +11,7 @@
 #   make redteam
 #
 # CI: Runs weekly (Monday 6am UTC) or on workflow_dispatch via
-# .github/workflows/ci.yml redteam job. NOT triggered on every push (LLM costs).
+# .github/workflows/redteam.yml. NOT triggered on every push (LLM costs).
 #
 # SYSTEM PROMPT SYNC: The systemPrompt below must match SYSTEM_PROMPT in agent.py.
 # The test_prompt_parity.py evals guard agent.py <-> deploy/app.py parity;
