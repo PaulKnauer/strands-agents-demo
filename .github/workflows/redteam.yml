@@ -71,8 +71,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
+      - name: Prepare promptfoo configuration
+        run: python compliance/prepare_promptfoo_config.py
+        env:
+          GUARDRAIL_ID: ${{ secrets.GUARDRAIL_ID }}
+
       - name: Run promptfoo red-team scan
-        run: npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
+        run: npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.ci.yaml --output compliance/redteam-report.json
         env:
           AWS_REGION: us-east-1
           GUARDRAIL_ID: ${{ secrets.GUARDRAIL_ID }}

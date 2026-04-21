@@ -10,9 +10,9 @@ Resources:
     Properties:
       Name: strands-demo-guardrail
       Description: >
-        Content safety and PII guardrail for the strands-agents-demo age-in-days agent.
-        Filters hate and violent content, blocks prompt-injection attacks, and anonymises
-        email and phone PII entities. Part of the NIST AI RMF Epic 4 compliance layer.
+        Content safety and PII guardrail for strands-agents-demo. Blocks prompt
+        attacks and high-confidence hate or violence, and anonymizes email and
+        phone PII for NIST AI RMF evidence.
 
       # Message shown to the user when their input is blocked by the guardrail.
       # Kept generic to avoid leaking guardrail configuration details.
@@ -35,7 +35,7 @@ Resources:
 
           # GOVERN-1.1: Detect and block prompt injection / jailbreak attempts on input.
           # OutputStrength is NONE because the model's own output cannot be a prompt attack.
-          - Type: PROMPT_ATTACKS
+          - Type: PROMPT_ATTACK
             InputStrength: HIGH
             OutputStrength: NONE
 

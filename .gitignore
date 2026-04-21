@@ -52,6 +52,7 @@ logs/
 htmlcov/
 coverage.xml
 *.cover
+compliance/promptfoo-redteam.ci.yaml
 
 # Distribution
 *.tar.gz

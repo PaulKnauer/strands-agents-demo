@@ -4,11 +4,25 @@ from pathlib import Path
 
 import yaml
 
+from compliance.prepare_promptfoo_config import prepare_promptfoo_config
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 REDTEAM_WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "redteam.yml"
 GITHUB_ACTIONS_STACK = PROJECT_ROOT / "infra" / "github_actions_stack.py"
 PROMPTFOO_CONFIG = PROJECT_ROOT / "compliance" / "promptfoo-redteam.yaml"
+GUARDRAIL_TEMPLATE = PROJECT_ROOT / "deploy" / "guardrail.yaml"
+MAKEFILE = PROJECT_ROOT / "Makefile"
+
+
+class CfnYamlLoader(yaml.SafeLoader):
+    pass
+
+
+def _construct_cfn_tag(loader, tag_suffix, node):
+    return loader.construct_scalar(node)
+
+
+CfnYamlLoader.add_multi_constructor("!", _construct_cfn_tag)
 
 
 class TestRedteamWorkflowCredentials:
@@ -69,6 +83,55 @@ class TestRedteamWorkflowCredentials:
         target = config["targets"][0]
         assert target["config"]["region"] == "us-east-1"
 
+    def test_workflow_prepares_runtime_promptfoo_config(self):
+        workflow = self._workflow()
+        steps = workflow["jobs"]["redteam"]["steps"]
+        prepare_step = next(
+            step
+            for step in steps
+            if step.get("name") == "Prepare promptfoo configuration"
+        )
+        run_step = next(
+            step for step in steps if step.get("name") == "Run promptfoo red-team scan"
+        )
+
+        assert prepare_step["run"] == "python compliance/prepare_promptfoo_config.py"
+        assert "--config compliance/promptfoo-redteam.ci.yaml" in run_step["run"]
+
+    def test_make_redteam_prepares_runtime_promptfoo_config(self):
+        content = MAKEFILE.read_text()
+        assert "$(PYTHON) compliance/prepare_promptfoo_config.py" in content
+        assert "--config compliance/promptfoo-redteam.ci.yaml" in content
+
+    def test_prepare_promptfoo_config_removes_guardrail_when_unset(self, tmp_path):
+        source = tmp_path / "promptfoo.yaml"
+        destination = tmp_path / "promptfoo.ci.yaml"
+        source.write_text(PROMPTFOO_CONFIG.read_text())
+
+        guardrails_enabled = prepare_promptfoo_config(
+            source, destination, guardrail_id=""
+        )
+        content = destination.read_text()
+
+        assert guardrails_enabled is False
+        assert "guardrailIdentifier:" not in content
+        assert "guardrailVersion:" not in content
+        assert "region: us-east-1" in content
+
+    def test_prepare_promptfoo_config_keeps_guardrail_when_set(self, tmp_path):
+        source = tmp_path / "promptfoo.yaml"
+        destination = tmp_path / "promptfoo.ci.yaml"
+        source.write_text(PROMPTFOO_CONFIG.read_text())
+
+        guardrails_enabled = prepare_promptfoo_config(
+            source, destination, guardrail_id="abc123"
+        )
+        content = destination.read_text()
+
+        assert guardrails_enabled is True
+        assert "guardrailIdentifier: ${GUARDRAIL_ID}" in content
+        assert "guardrailVersion: ${GUARDRAIL_VERSION}" in content
+
 
 class TestGithubActionsCdkStack:
     def _content(self) -> str:
@@ -89,3 +152,29 @@ class TestGithubActionsCdkStack:
         assert "bedrock:InvokeModelWithResponseStream" in content
         assert "bedrock:ApplyGuardrail" in content
         assert "bedrock:*" not in content
+
+
+class TestGuardrailTemplate:
+    def _template(self) -> dict:
+        with GUARDRAIL_TEMPLATE.open() as f:
+            return yaml.load(f, Loader=CfnYamlLoader)
+
+    def test_prompt_attack_filter_uses_cloudformation_enum(self):
+        template = self._template()
+
+        filters = template["Resources"]["StrandsDemoGuardrail"]["Properties"][
+            "ContentPolicyConfig"
+        ]["FiltersConfig"]
+        filter_types = {filter_config["Type"] for filter_config in filters}
+
+        assert "PROMPT_ATTACK" in filter_types
+        assert "PROMPT_ATTACKS" not in filter_types
+
+    def test_guardrail_description_fits_cloudformation_limit(self):
+        template = self._template()
+
+        description = template["Resources"]["StrandsDemoGuardrail"]["Properties"][
+            "Description"
+        ]
+
+        assert len(description) <= 200
