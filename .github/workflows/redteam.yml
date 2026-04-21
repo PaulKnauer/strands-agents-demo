@@ -76,7 +76,7 @@ jobs:
         env:
           AWS_REGION: us-east-1
           GUARDRAIL_ID: ${{ secrets.GUARDRAIL_ID }}
-          GUARDRAIL_VERSION: ${{ secrets.GUARDRAIL_VERSION }}
+          GUARDRAIL_VERSION: ${{ secrets.GUARDRAIL_VERSION || 'DRAFT' }}
 
       - name: Upload red-team report
         if: always() # Upload even on failure — report contains evidence of what failed

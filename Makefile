@@ -116,7 +116,7 @@ teardown:
 
 .PHONY: redteam
 redteam:
-	npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
+	GUARDRAIL_VERSION=$${GUARDRAIL_VERSION:-DRAFT} npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.yaml --output compliance/redteam-report.json
 
 .PHONY: dashboard
 dashboard:

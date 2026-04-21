@@ -58,6 +58,17 @@ class TestRedteamWorkflowCredentials:
         assert "bedrock-agentcore" not in content
         assert "runtimes/" not in content
 
+    def test_promptfoo_config_does_not_use_shell_default_expansion(self):
+        content = PROMPTFOO_CONFIG.read_text()
+        assert ":-" not in content
+
+    def test_promptfoo_bedrock_region_is_concrete(self):
+        with PROMPTFOO_CONFIG.open() as f:
+            config = yaml.safe_load(f)
+
+        target = config["targets"][0]
+        assert target["config"]["region"] == "us-east-1"
+
 
 class TestGithubActionsCdkStack:
     def _content(self) -> str:
