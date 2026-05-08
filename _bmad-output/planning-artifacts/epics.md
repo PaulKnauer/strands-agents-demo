@@ -9,7 +9,7 @@ inputDocuments:
 
 ## Overview
 
-This document provides the complete epic and story breakdown for strands-agents-demo, decomposing the requirements from the PRD and Architecture into implementable stories.
+This document provides the complete epic and story breakdown for strands-agents-demo, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
 ## Requirements Inventory
 
@@ -66,312 +66,422 @@ NFR16: The project can be forked and adapted to a different use case by modifyin
 
 ### Additional Requirements
 
-- Python 3.11+ required (Strands SDK minimum is 3.10; demo pins to 3.11+ for clarity)
-- Pinned dependencies: `strands-agents==1.26.0`, `strands-agents-tools`, `python-dotenv>=1.0.0`, `boto3>=1.34.0`, `bedrock-agentcore` (deploy dependency, comment-marked in requirements.txt)
-- Gemini fallback requires optional extra: `pip install strands-agents[gemini]` (documented in README)
-- IaC technology: AgentCore CLI (`agentcore configure` / `agentcore deploy`) with boto3 fallback in `deploy/deploy.py`
-- All `@tool` functions must return a string (not dict/object); tool errors returned as string, not raised as exceptions
-- All `@tool` functions must have a clear imperative docstring (Strands uses it as the model's tool description)
-- System prompt defined as inline constant `SYSTEM_PROMPT` at top of `agent.py`
-- Required env vars accessed via `os.environ[]` (fail-fast); optional vars via `os.environ.get()`
-- `load_dotenv()` called at module level before any `os.environ` access
-- `deploy/deploy.py` must: check for existing agent (idempotency), create least-privilege IAM service role, register agent with AgentCore, output endpoint URL, print troubleshooting hints on common errors
-- Code formatter: `black` — run before completing any story
-- No automated tests at MVP — acceptance testing is manual run + AgentCore console verification
-- `.env.example` must group variables by: LLM Config, AWS Config, Optional local-adapter credentials as documented
-- `.vscode/launch.json` must use `envFile` key to load `.env` for F5 debugging
-- Implementation sequence: agent.py → requirements.txt + .env.example → .vscode/ → deploy/deploy.py → README.md (last, written against working code)
+- Python 3.11+ required
+- Local runtime uses `strands-agents==1.26.0`, `strands-agents-tools`, `python-dotenv>=1.0.0`, and `boto3>=1.34.0`
+- `bedrock-agentcore` is required for deployment/runtime packaging and should be treated as a deploy dependency
+- AgentCore runtime target is `PYTHON_3_12`
+- Project context is greenfield; initial implementation should create the scaffold directly rather than clone a starter template
+- Deployment target is AWS AgentCore in `us-east-1`
+- IaC path is AgentCore CLI with boto3 fallback in `deploy/deploy.py`
+- `agent.py` must stay lean and under 150 lines; model construction should delegate behind adapter boundaries
+- `model_adapters.py` owns local adapter selection and capability metadata
+- `deploy/app.py` owns the deployed runtime adapter contract and Bedrock Converse path
+- Local and deployed runtimes must remain separate; do not collapse Strands local execution and deployed Bedrock runtime into one path
+- `load_dotenv()` must run before any `os.environ` access in local and deploy entrypoints
+- Required configuration uses fail-fast `os.environ[...]`; optional values may use `os.environ.get()`
+- All `@tool` functions must return strings, not dicts or raised exceptions
+- All `@tool` functions must have clear imperative docstrings because Strands uses them as tool descriptions
+- `SYSTEM_PROMPT` must be an inline constant in `agent.py`
+- `app.run(host="0.0.0.0")` in AgentCore runtime must remain unconditional
+- Bedrock is the primary MVP inference and deployment-aligned control plane
+- Initial local adapters support `bedrock` and `gemini`
+- Planned staged expansion path includes Gemma, Moonshot AI, Llama, Qwen, and DeepSeek
+- Provider expansion is cross-cutting: code, tests, docs, `.env.example`, deployment assumptions, and IAM scoping must move together
+- If provider support differs between local and deployed runtimes, that boundary must be documented explicitly
+- Bedrock guardrails are optional and only wired when `GUARDRAIL_ID` is set
+- Deployment packaging must bundle `deploy/app.py` and Linux wheels, not `agent.py`
+- The manylinux/cp312 wheel install logic in `deploy/deploy.py` must be preserved
+- Deploy flow must remain idempotent and least-privilege
+- `README.md`, inline comments, `.env.example`, and troubleshooting guidance are first-class deliverables
+- Use `black` before completing implementation work
+- Preserve the contract-test mindset: static tests enforce scaffold and convention rules, unit tests mock cloud SDKs, and live evals remain opt-in
 
 ### UX Design Requirements
 
-Not applicable — this is a CLI/API developer tool with no visual interface. Developer experience requirements are fully captured in the FRs and NFRs above (FR16–FR29, NFR12–NFR16).
+Not applicable — this is a CLI/API developer tool with no visual interface. Developer experience requirements are fully captured in the FRs, NFRs, and architecture constraints above.
 
 ### FR Coverage Map
 
-FR1: Epic 1 — Natural language date input, conversational agent response
-FR2: Epic 1 — Multi-format date parsing (natural language, ISO 8601, DD/MM/YYYY)
-FR3: Epic 1 — Ambiguous format clarification (via SYSTEM_PROMPT instruction)
-FR4: Epic 1 — Friendly, conversational response including age in days
-FR5: Epic 1 — Invalid/unparseable input handled gracefully (via SYSTEM_PROMPT + LLM)
-FR6: Epic 1 — `get_today_date()` @tool retrieves current date
-FR7: Epic 1 — LLM calculates days difference using tool result
-FR8: Epic 1 — Agent returns age as whole number of days
-FR9: Epic 1 — @tool decorator pattern demonstrated
-FR10: Epic 1 — Tool invoked during conversation turn, result used in response
-FR11: Epic 2 — AgentCore captures tool invocations and results automatically (zero custom code)
-FR12: Epic 1 — adapter-based MODEL_PROVIDER + MODEL_ID configuration for supported model paths
-FR13: Epic 1 — AWS_REGION env var
-FR14: Epic 1 — All API keys and credentials via env vars (.env + load_dotenv)
-FR15: Epic 1 — .env.example with every variable documented (description + example)
-FR16: Epic 1 — README setup instructions with zero undocumented steps
-FR17: Epic 1 — Single-command run: `python agent.py`
-FR18: Epic 1 — .vscode/launch.json for F5 debugging with .env loaded
-FR19: Epic 1 — `pip install -r requirements.txt` in venv
-FR20: Epic 2 — `deploy/deploy.py` one-command AgentCore deployment (no console steps)
-FR21: Epic 2 — Deployed endpoint verification after deployment
-FR22: Epic 2 — All infrastructure provisioned in us-east-1
-FR23: Epic 2 — README troubleshooting section (IAM, env vars, wrong region)
-FR24: Epic 2 — AgentCore console shows tool call traces
-FR25: Epic 2 — Tool I/O visible in AgentCore without custom logging code
-FR26: Epic 3 — README: complete project understanding for developers new to Strands/AgentCore
-FR27: Epic 3 — README sections: ToC, prerequisites, setup, deployment, structure, how it works, troubleshooting, contributing
-FR28: Epic 3 — Inline comments throughout all files explaining the why
-FR29: Epic 3 — Self-explanatory project structure and file/folder names
+FR1: Epic 1 - natural language date input
+FR2: Epic 1 - multi-format date parsing
+FR3: Epic 1 - ambiguous format clarification
+FR4: Epic 1 - friendly conversational response
+FR5: Epic 1 - graceful invalid input handling
+FR6: Epic 1 - dedicated date tool
+FR7: Epic 1 - age-in-days calculation
+FR8: Epic 1 - whole-number day output
+FR9: Epic 1 - custom Strands tool definition
+FR10: Epic 1 - tool invocation during conversation
+FR11: Epic 2 - AgentCore observability capture
+FR12: Epic 1 and Epic 4 - adapter-based model configuration and later expansion
+FR13: Epic 1 - AWS region configuration
+FR14: Epic 1 - credentials via environment variables
+FR15: Epic 1 - documented `.env.example`
+FR16: Epic 1 - local setup from README
+FR17: Epic 1 - single-command local run
+FR18: Epic 1 - VS Code F5 debugging
+FR19: Epic 1 - dependency installation in venv
+FR20: Epic 2 and Epic 4 - deployment path plus expanded supported model paths
+FR21: Epic 2 and Epic 4 - deployed verification path plus expanded model validation
+FR22: Epic 2 - infrastructure in `us-east-1`
+FR23: Epic 2 - troubleshooting for deployment issues
+FR24: Epic 2 - tool-call traces in AgentCore
+FR25: Epic 2 - tool I/O visibility without custom logging
+FR26: Epic 3 - project understanding from README
+FR27: Epic 3 - required README structure
+FR28: Epic 3 - inline explanation comments
+FR29: Epic 3 - self-explanatory structure
 
 ## Epic List
 
-### Epic 1: Local Agent — Working Age-in-Days Calculator
+### Epic 1: Local Agent Experience
 
-A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, capability-driven local model configuration with adapter-based provider selection, Bedrock-first support, initial Gemini local adapter support, and VS Code F5 debugging.
+A developer can clone the repo, configure the environment, run the age-in-days agent locally, and validate the core Strands tool-driven experience with adapter-based local model selection.
 
 **FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR10, FR12, FR13, FR14, FR15, FR16, FR17, FR18, FR19
 
----
+### Epic 2: AgentCore Deployment and Observability
 
-### Epic 2: AgentCore Production Deployment & Observability
-
-A developer can deploy the agent to AWS AgentCore with a single script command, verify it responds correctly via the deployed endpoint, and observe every tool call trace and invocation detail in the AgentCore console — with zero custom logging code written.
+A developer can deploy the agent to AWS AgentCore, verify the deployed endpoint, and observe tool activity and responses through managed AgentCore traces.
 
 **FRs covered:** FR11, FR20, FR21, FR22, FR23, FR24, FR25
 
----
+### Epic 3: Developer Documentation and Project Finalization
 
-### Epic 3: Developer Documentation & Project Finalization
-
-A developer new to Strands and AgentCore can understand the complete project — purpose, architecture, local setup, deployment, and how it works — from the README and inline code documentation alone, and can fork and adapt it to a new use case by changing one file.
+A developer new to Strands and AgentCore can understand, run, troubleshoot, and fork the project from the documentation and code structure alone.
 
 **FRs covered:** FR26, FR27, FR28, FR29
 
----
+### Epic 4: Multi-Provider Model Expansion
 
-### Epic 5: Multi-Provider Model Expansion
-
-A developer can extend the project beyond the initial Bedrock and Gemini support by adding or enabling staged support for additional model families such as Gemma, Moonshot AI, Llama, Qwen, and DeepSeek through the adapter and capability-gateway architecture.
+A developer can extend the project beyond the initial supported model paths through the adapter architecture, with staged support for additional model families and clearly documented local versus deployed runtime boundaries.
 
 **FRs covered:** FR12, FR20, FR21
 
----
+## Epic 1: Local Agent Experience
 
-## Epic 1: Local Agent — Working Age-in-Days Calculator
+A developer can clone the repo, configure the environment, run the age-in-days agent locally, and validate the core Strands tool-driven experience with adapter-based local model selection.
 
-A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, capability-driven local model configuration with adapter-based provider selection, Bedrock-first support, initial Gemini local adapter support, and VS Code F5 debugging.
-
-### Story 1.1: Project Scaffold & Dependency Setup
+### Story 1.1: Project Scaffold and Configuration Contract
 
 As a developer,
-I want the project scaffold created with all required files (`requirements.txt`, `.env.example`, `.gitignore`, and an `agent.py` stub),
-So that I can install dependencies and begin developing without any undocumented manual steps.
+I want the local project scaffold and configuration contract in place,
+So that I can install dependencies, configure supported model paths, and start development without undocumented setup work.
 
 **Acceptance Criteria:**
 
-**Given** I have cloned the repository and Python 3.11+ is installed
-**When** I create a virtual environment with `python -m venv venv` and activate it
-**Then** I can run `pip install -r requirements.txt` without errors
+**Given** I have cloned the repository and have Python 3.11+ installed
+**When** I create a virtual environment and run `pip install -r requirements.txt`
+**Then** the dependencies install successfully
+**And** the requirements file includes the local runtime packages plus deployment-related dependency notes required by the architecture
 
-**Given** I examine `requirements.txt`
-**When** I read it
-**Then** it contains pinned dependencies: `strands-agents==1.26.0`, `strands-agents-tools`, `python-dotenv>=1.0.0`, `boto3>=1.34.0`, with `bedrock-agentcore` marked with a `# deploy dependency` comment
+**Given** I inspect `.env.example`
+**When** I review the configuration sections
+**Then** I see documented variables for model selection, AWS settings, deployment naming, and optional local-adapter credentials
+**And** the file contains no real credentials
 
-**Given** I examine `.env.example`
-**When** I read it
-**Then** it contains all required variables (MODEL_PROVIDER, MODEL_ID, AWS_REGION, AGENT_NAME) with description comments above each, grouped by: LLM Config, AWS Config, and Optional local-adapter credentials — and contains no real credentials
+**Given** I inspect the root scaffold
+**When** I review the project layout
+**Then** the expected files and folders for local agent work, deployment, and editor support are present
+**And** `.gitignore` excludes `.env`, Python cache artifacts, and local virtual environment files
 
-**Given** `.env.example` exists
-**When** I copy it to `.env` and fill in my credentials
-**Then** `agent.py` can load the environment via `load_dotenv()` without errors
+### Story 1.2: Local Age-in-Days Agent
 
-**Given** I examine `.gitignore`
-**When** I read it
-**Then** `.env`, `__pycache__/`, `.venv/`, and `*.pyc` are excluded from version control
-
-### Story 1.2: Working Age-in-Days Agent
-
-As a developer (and as an end user),
-I want a fully functional agent in `agent.py` that accepts a date of birth in natural language or structured format and returns the age in days,
-So that I can run `python agent.py`, type my date of birth, and receive a correct, friendly response — demonstrating the complete Strands `@tool` and `Agent()` pattern.
+As a developer and evaluator,
+I want a working local agent that accepts date-of-birth input and responds conversationally,
+So that I can validate the core Strands agent pattern and user-facing behavior end to end.
 
 **Acceptance Criteria:**
 
-**Given** `agent.py` is implemented with `get_today_date` @tool, SYSTEM_PROMPT constant, model config, and REPL loop
-**When** I run `python agent.py` with MODEL_PROVIDER=bedrock and valid AWS credentials
-**Then** the agent starts within 10 seconds and displays an interactive prompt
+**Given** `agent.py` is implemented with `SYSTEM_PROMPT`, the `get_today_date` tool, model construction, and a REPL loop
+**When** I run `python agent.py` with a supported local model path configured
+**Then** the agent starts within 10 seconds
+**And** it displays an interactive prompt
 
 **Given** the agent is running
-**When** I type "I was born on 14th March 1990"
-**Then** the agent invokes `get_today_date`, calculates the difference, and responds with the correct age in days in a friendly, conversational tone
+**When** I enter a natural-language birth date such as `I was born on 14th March 1990`
+**Then** the agent invokes `get_today_date`
+**And** it returns the correct age in days in a friendly response
 
 **Given** the agent is running
-**When** I type a date in DD/MM/YYYY format (e.g. "14/03/1990")
-**Then** the agent correctly interprets the date and returns the age in days
+**When** I enter a supported structured date format such as `1990-03-14` or `14/03/1990`
+**Then** the agent interprets the input correctly
+**And** returns the age in days without crashing
 
 **Given** the agent is running
-**When** I type an ambiguous date (e.g. "3/4/1990" — could be March 4 or April 3)
-**Then** the agent asks a clarifying question rather than returning a potentially incorrect result
+**When** I enter an ambiguous date such as `3/4/1990`
+**Then** the agent asks a clarifying question before calculating
+**And** it does not guess silently
 
 **Given** the agent is running
-**When** I type an unparseable or clearly invalid input (e.g. "I was born on the moon")
-**Then** the agent returns a helpful error message — it does not crash or return a wrong calculation
+**When** I enter clearly invalid input
+**Then** the agent responds with a helpful error message
+**And** the process continues running
 
-**Given** I examine `agent.py`
-**When** I read the file
-**Then** it is under 150 lines, all functions use `snake_case`, `get_today_date` returns a `str` (not dict or exception), and `get_today_date` has a clear imperative docstring
-
-**Given** I examine the env var access pattern in `agent.py`
-**When** I read it
-**Then** `load_dotenv()` is called at module level before any `os.environ` access, required vars use `os.environ[]` (fail-fast), and `SYSTEM_PROMPT` is defined as an inline constant at the top of the file
-
-**Given** MODEL_PROVIDER selects an implemented local adapter path and the required credentials for that adapter are configured
-**When** I run `python agent.py`
-**Then** the agent starts and responds to date queries using the configured adapter-supported model path — no application-logic code modification required
-
-**Given** the agent is running
-**When** I type "exit", "quit", or "q"
-**Then** the REPL loop exits cleanly
-
-### Story 1.3: VS Code Debug Configuration
+### Story 1.3: Adapter-Based Local Model Selection
 
 As a developer,
-I want to press F5 in VS Code to launch `agent.py` with the debugger attached and `.env` automatically loaded,
-So that I can set breakpoints and step through the agent code without any manual configuration.
+I want local model selection routed through the adapter abstraction,
+So that I can switch between supported local model paths without editing application logic.
 
 **Acceptance Criteria:**
 
-**Given** VS Code is open with the project folder
+**Given** the local runtime supports the initial `bedrock` and `gemini` adapter paths
+**When** I configure `MODEL_PROVIDER` and `MODEL_ID` for one of those supported paths
+**Then** the local agent builds the model through the adapter boundary
+**And** no application-logic code changes are required
+
+**Given** an unsupported provider or unsupported local/runtime combination is configured
+**When** the local agent starts
+**Then** it fails clearly with an explicit configuration error
+**And** it does not silently fall back to another provider
+
+**Given** I inspect the local model selection implementation
+**When** I review the code
+**Then** adapter selection logic is separated from the conversational REPL logic
+**And** the implementation preserves the architecture rule that local and deployed runtimes remain distinct
+
+### Story 1.4: VS Code Debug Experience
+
+As a developer,
+I want F5 debugging configured for the local agent path,
+So that I can inspect tool execution and runtime behavior without manual debugger setup.
+
+**Acceptance Criteria:**
+
+**Given** the project is open in VS Code
 **When** I press F5
 **Then** `agent.py` launches with the Python debugger attached
+**And** environment variables are loaded from `.env`
 
-**Given** `.vscode/launch.json` exists with an `envFile` key pointing to `${workspaceFolder}/.env`
-**When** I press F5
-**Then** environment variables from `.env` are loaded automatically — no manual `export` required
+**Given** I set a breakpoint inside local agent execution
+**When** I interact with the REPL
+**Then** execution pauses at the breakpoint
+**And** I can inspect local variables and tool flow
 
-**Given** I set a breakpoint inside `get_today_date()`
-**When** I press F5 and type a date of birth at the agent prompt
-**Then** execution pauses at the breakpoint and I can inspect local variables
+**Given** I inspect `.vscode/extensions.json`
+**When** I review the recommended extensions
+**Then** the file points developers to the required Python tooling
+**And** it reflects the intended local development workflow
 
-**Given** `.vscode/extensions.json` exists
-**When** VS Code opens the project
-**Then** it recommends Python and Pylance extensions (and optionally the dotenv extension)
+## Epic 2: AgentCore Deployment and Observability
 
----
+A developer can deploy the agent to AWS AgentCore, verify the deployed endpoint, and observe tool activity and responses through managed AgentCore traces.
 
-## Epic 2: AgentCore Production Deployment & Observability
-
-A developer can deploy the agent to AWS AgentCore with a single script command, verify it responds correctly via the deployed endpoint, and observe every tool call trace and invocation detail in the AgentCore console — with zero custom logging code written.
-
-### Story 2.1: AgentCore Deployment Script
+### Story 2.1: AgentCore Deployment Path
 
 As a developer,
-I want to run `python deploy/deploy.py` to provision all required AWS infrastructure and deploy the agent to AgentCore in `us-east-1`,
-So that my agent is running in production without any manual AWS console steps.
+I want a one-command deployment path to AgentCore,
+So that I can provision and publish the agent without manual console setup.
 
 **Acceptance Criteria:**
 
-**Given** I have valid AWS credentials and `AWS_REGION=us-east-1` and `AGENT_NAME` set in `.env`
+**Given** I have valid AWS credentials, `AWS_REGION=us-east-1`, and deployment configuration set
 **When** I run `python deploy/deploy.py`
-**Then** the script completes without errors, provisions the infrastructure, and prints the deployed AgentCore endpoint URL
+**Then** the deployment completes successfully or fails with actionable diagnostics
+**And** it prints the deployed endpoint details needed for verification
 
-**Given** the deployment script runs
-**When** it executes
-**Then** it creates a least-privilege IAM service role scoped only to `bedrock:InvokeModel` on the specific model ARN and `bedrock-agentcore:*` on the specific agent resource — no over-provisioned permissions
+**Given** the deployment path provisions infrastructure
+**When** it creates or updates AWS resources
+**Then** it uses least-privilege IAM scoping
+**And** it preserves the documented packaging approach for the AgentCore runtime
 
 **Given** the agent has already been deployed once
-**When** I run `python deploy/deploy.py` again
-**Then** the script detects the existing agent, updates it rather than creating a duplicate, and exits cleanly — idempotent behaviour
+**When** I run the deployment again
+**Then** the process updates or reuses the existing resources idempotently
+**And** it does not create duplicate agents unnecessarily
 
-**Given** `deploy/deploy.py` executes
-**When** it encounters a common error (missing IAM permission, wrong region, missing env var)
-**Then** it prints a descriptive troubleshooting hint specific to that error — not a raw AWS exception traceback
-
-**Given** `deploy/deploy.py` completes successfully
-**When** I read the console output
-**Then** the deployed agent endpoint URL is clearly displayed and I can copy it for verification
-
-**Given** I examine `deploy/deploy.py`
-**When** I read it
-**Then** all non-obvious blocks have inline comments explaining the *why*, it follows PEP 8, and `black deploy/deploy.py` produces no changes
-
-### Story 2.2: Endpoint Verification & Observability Confirmation
+### Story 2.2: Deployed Runtime Adapter Contract
 
 As a developer,
-I want to invoke the deployed AgentCore agent via its endpoint and then view the tool call traces in the AgentCore console,
-So that I can verify the production deployment works and demonstrate that AgentCore provides full observability with zero custom logging code.
+I want the deployed runtime to follow the documented Bedrock-first adapter contract,
+So that the cloud path remains reliable and distinct from the local Strands path.
 
 **Acceptance Criteria:**
 
-**Given** the agent has been deployed successfully (Story 2.1 complete)
-**When** I invoke the agent via the AgentCore endpoint (CLI or console) with a date of birth query
-**Then** the agent responds with the correct age in days within 5 seconds
+**Given** the deployed runtime entrypoint is implemented
+**When** I inspect `deploy/app.py`
+**Then** it uses the deployed runtime contract rather than importing the local Strands runtime directly
+**And** it preserves the required unconditional AgentCore startup behavior
 
-**Given** I have invoked the deployed agent at least once
-**When** I open the AgentCore console and navigate to the agent's invocation history
-**Then** I can see the `get_today_date` tool call traced — including its input and output
+**Given** provider support differs between local and deployed runtimes
+**When** the deployed runtime is configured
+**Then** supported and unsupported combinations are made explicit
+**And** the implementation does not hide those boundaries with silent fallbacks
 
-**Given** I examine the tool call trace in the AgentCore console
-**When** I inspect the trace detail
-**Then** I can see the exact string returned by `get_today_date` (e.g. "2026-03-16") and the agent's final response — without any custom logging code having been written
+**Given** deployment packaging is prepared
+**When** the artifact is assembled
+**Then** it bundles the deployed runtime path and required Linux wheels
+**And** it does not package `agent.py` as the production runtime entrypoint
 
----
+### Story 2.3: Endpoint Verification and Observability Confirmation
 
-## Epic 3: Developer Documentation & Project Finalization
+As a developer,
+I want to verify the deployed agent and inspect its traces,
+So that I can prove the production path works and demonstrate managed observability.
 
-A developer new to Strands and AgentCore can understand the complete project — purpose, architecture, local setup, deployment, and how it works — from the README and inline code documentation alone, and can fork and adapt it to a new use case by changing one file.
+**Acceptance Criteria:**
+
+**Given** the agent has been deployed successfully
+**When** I invoke the deployed endpoint with a date-of-birth query
+**Then** the agent returns the correct age in days within the expected performance envelope
+**And** the verification path is documented or reproducible
+
+**Given** the deployed agent has processed at least one request
+**When** I inspect the AgentCore observability surface
+**Then** I can see the tool invocation trace and final response
+**And** no custom logging code is required to surface that information
+
+**Given** a common deployment or verification issue occurs
+**When** I troubleshoot the failure
+**Then** the documented guidance covers region, credentials, env vars, and model access boundaries
+**And** the resolution path is explicit enough for a new developer to follow
+
+## Epic 3: Developer Documentation and Project Finalization
+
+A developer new to Strands and AgentCore can understand, run, troubleshoot, and fork the project from the documentation and code structure alone.
 
 ### Story 3.1: Comprehensive README
 
 As a developer new to Strands and AgentCore,
-I want a README that guides me from zero to a running local agent and deployed AgentCore instance — covering all prerequisites, steps, and troubleshooting — without requiring any prior knowledge of Strands or AgentCore,
-So that I can follow it alone and reach a working, observable production agent.
+I want a complete README covering setup, deployment, and troubleshooting,
+So that I can get from clone to working agent without relying on unstated context.
 
 **Acceptance Criteria:**
 
-**Given** a developer new to Strands and AgentCore opens the README
-**When** they read it
-**Then** they understand the project's purpose, architecture, and what Strands + AgentCore provides — within the first screen of content
+**Given** I open the README
+**When** I read the opening sections
+**Then** I understand the project purpose, architecture, and expected outcomes quickly
+**And** the document is written for someone new to this stack
 
-**Given** the README exists
-**When** I check its structure
-**Then** it contains all of: table of contents, prerequisites (Python 3.11+, AWS account, Bedrock/Gemini access, AWS CLI), local setup (clone → venv → pip install → .env → run), AgentCore deployment, project structure, how it works (data flow diagram or description), troubleshooting, and contributing
+**Given** I inspect the README structure
+**When** I review the headings and content
+**Then** it includes prerequisites, local setup, deployment, project structure, how it works, troubleshooting, and contributing guidance
+**And** it documents the supported configuration paths clearly
 
-**Given** the troubleshooting section exists
-**When** I read it
-**Then** it covers at minimum: missing IAM permissions for AgentCore, wrong AWS region, missing or misconfigured env vars, and model access not enabled in Bedrock
+**Given** I follow the README step by step
+**When** I complete the documented local and deployment flows
+**Then** I can run the local agent and deploy the project without undocumented steps
+**And** the troubleshooting guidance covers the most likely failure cases
 
-**Given** the README includes a credential warning
-**When** I read the setup section
-**Then** there is an explicit warning against committing `.env` or any credentials to version control
+### Story 3.2: Inline Explanation and Structure Clarity
 
-**Given** a developer follows the README local setup section step by step
-**When** they complete all steps
-**Then** they can run `python agent.py` and interact with the agent — with no additional steps required beyond what is documented
-
-**Given** a developer follows the README AgentCore deployment section
-**When** they complete all steps
-**Then** they can run `python deploy/deploy.py` and have a working deployed agent — with no manual AWS console steps
-
-### Story 3.2: Inline Code Documentation & Project Structure Finalization
-
-As a developer reading the codebase for the first time,
-I want every non-obvious code block to have an inline comment explaining *why* it exists, and the project structure to be self-explanatory from file and folder names alone,
-So that I can understand the entire project within 5 minutes and confidently fork it to build my own agent.
+As a developer reading the repo for the first time,
+I want the code and structure to explain themselves,
+So that I can confidently adapt the project for my own use case.
 
 **Acceptance Criteria:**
 
-**Given** I read `agent.py`
-**When** I encounter non-obvious blocks (e.g. `load_dotenv()` call, `os.environ[]` vs `os.environ.get()`, model provider branching, `@tool` docstring, REPL exit conditions)
-**Then** each has an inline comment explaining *why* — not just restating what the code does
+**Given** I inspect the local and deployed runtime code
+**When** I encounter non-obvious logic such as env loading, adapter boundaries, deployment packaging, or IAM setup
+**Then** I find concise inline comments explaining why the code exists
+**And** the comments do not merely restate the syntax
 
-**Given** I read `deploy/deploy.py`
-**When** I encounter non-obvious blocks (e.g. idempotency check, IAM policy construction, AgentCore registration call, error hint printing)
-**Then** each has an inline comment explaining *why*
+**Given** I inspect the project tree
+**When** I review the top-level files and key folders
+**Then** their purposes are immediately understandable
+**And** a developer can identify where to change agent behavior versus deployment behavior
 
-**Given** I look at the project root directory listing
-**When** I read the file and folder names
-**Then** I can immediately identify the purpose of each: `agent.py` (the agent), `deploy/` (deployment), `.env.example` (config template), `requirements.txt` (dependencies), `README.md` (documentation) — without needing to open them
+**Given** I run formatting or static convention checks aligned with the project rules
+**When** I validate the maintained files
+**Then** the code remains PEP 8 compliant
+**And** the project still respects the documented structural constraints such as the lean `agent.py` rule
 
-**Given** I run `black agent.py` and `black deploy/deploy.py`
-**When** black completes
-**Then** it reports no changes — all files are PEP 8 compliant
+## Epic 4: Multi-Provider Model Expansion
 
-**Given** a developer wants to fork this project for a different use case
-**When** they modify only `agent.py` (changing the tool and SYSTEM_PROMPT) and update `.env`
-**Then** the rest of the project (deployment script, VS Code config, requirements) works without modification
+A developer can extend the project beyond the initial supported model paths through the adapter architecture, with staged support for additional model families and clearly documented local versus deployed runtime boundaries.
+
+### Story 4.1: Expansion Scope Alignment
+
+As a developer extending model support,
+I want the planning and configuration artifacts aligned to the adapter-expansion strategy,
+So that implementation starts from a coherent contract rather than mixed legacy assumptions.
+
+**Acceptance Criteria:**
+
+**Given** the project supports a Bedrock-first architecture with staged expansion
+**When** I inspect the planning artifacts and configuration scaffolding
+**Then** they describe adapter-based provider selection consistently
+**And** they distinguish initial support from future expansion targets
+
+**Given** `.env.example`, README, and project context reference supported model paths
+**When** I review those artifacts
+**Then** they accurately reflect the supported local and deployed runtime boundaries
+**And** they do not imply unsupported runtime symmetry
+
+### Story 4.2: Capability Registry and Adapter Extension
+
+As a developer,
+I want the adapter layer extended with capability-aware model registration,
+So that additional model families can be introduced in a controlled and explicit way.
+
+**Acceptance Criteria:**
+
+**Given** the adapter architecture currently supports the initial local model paths
+**When** I extend the registry for new candidate model families
+**Then** each supported path is represented through explicit capability-aware registration
+**And** unsupported combinations fail clearly
+
+**Given** new model families are being introduced
+**When** I review the local adapter implementation
+**Then** support is added without collapsing the separation between local and deployed runtime concerns
+**And** the code remains consistent with the documented abstraction boundary
+
+**Given** provider expansion affects more than one layer
+**When** the implementation is updated
+**Then** code, tests, configuration docs, and deployment assumptions are advanced together
+**And** no hidden support gap is introduced
+
+### Story 4.3: Bedrock-First Model Family Rollout
+
+As a developer,
+I want at least one staged expansion delivered through the Bedrock-first path,
+So that the project demonstrates credible growth beyond the original supported models while preserving deployment alignment.
+
+**Acceptance Criteria:**
+
+**Given** candidate additional model families are available through the chosen rollout path
+**When** one supported expansion family is enabled
+**Then** it works through the adapter architecture using the documented configuration pattern
+**And** the implementation preserves Bedrock-first deployment assumptions where required
+
+**Given** the expanded model path is enabled
+**When** I exercise the supported local or deployed validation flow for that path
+**Then** the project demonstrates the new support successfully
+**And** the supported boundary is documented clearly for developers
+
+### Story 4.4: Optional Direct-Provider Evaluation Boundary
+
+As a maintainer,
+I want any non-Bedrock direct-provider or LiteLLM-style path treated as an explicit evaluated boundary,
+So that optional expansion does not accidentally weaken the core architecture contract.
+
+**Acceptance Criteria:**
+
+**Given** a direct-provider or alternative gateway path is being considered
+**When** I document or prototype that path
+**Then** it is clearly marked as optional and justified by capability gaps
+**And** it is not presented as default parity with the Bedrock-first path
+
+**Given** optional direct-provider support differs from the primary deployed path
+**When** I review the resulting docs and configuration guidance
+**Then** the limitations and expected usage are explicit
+**And** developers can tell which paths are production-aligned versus exploratory
+
+### Story 4.5: Expansion Documentation and Verification
+
+As a developer,
+I want the expanded model-support surface documented and verified,
+So that I can adopt supported new model paths with confidence.
+
+**Acceptance Criteria:**
+
+**Given** new model-support paths have been added or clarified
+**When** I inspect the tests, verification notes, and documentation
+**Then** each supported path has an explicit verification strategy
+**And** local versus deployed runtime expectations are documented
+
+**Given** the expansion changes affect setup or troubleshooting
+**When** I review README and related docs
+**Then** the new configuration and support boundaries are captured accurately
+**And** the guidance remains usable for a developer new to the repository
