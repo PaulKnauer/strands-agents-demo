@@ -53,7 +53,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 - **Language:** Python 3.11+
 - **Agent framework:** Strands Agents SDK (version to be pinned in `requirements.txt`)
-- **LLM:** Amazon Bedrock (Claude 3 Sonnet/Haiku) primary; Google Gemini free tier fallback
+- **LLM:** Capability-driven model abstraction with Amazon Bedrock as the primary inference and deployment-aligned control plane for MVP. Initial local adapters support Bedrock and Gemini; the architecture is designed for staged expansion toward Gemma, Moonshot AI, Llama, Qwen, and DeepSeek.
 - **Deployment target:** AWS AgentCore, `us-east-1`
 - **IDE:** VS Code — `.vscode/launch.json` and `extensions.json` required
 - **Dependency management:** `requirements.txt` + `venv`
@@ -125,7 +125,7 @@ strands-agents-demo/
 - **Deployment Tooling:** AgentCore CLI (`agentcore configure` / `agentcore deploy`) with boto3 scripting fallback in `deploy/deploy.py`
 - **Configuration:** `python-dotenv` loads `.env`; `os.environ` used directly in code — no config file layer
 - **IaC Decision Resolved:** AgentCore CLI satisfies FR20/FR22 and NFR11 (idempotent) with the simplest possible script
-- **Code Organization:** Single `agent.py` for all agent logic; `deploy/` directory isolated for infrastructure concerns
+- **Code Organization:** `agent.py` stays lean and delegates model construction; `model_adapters.py` owns local adapter selection and capabilities; `deploy/app.py` owns deployed runtime adapter behavior; `deploy/` remains isolated for infrastructure concerns
 - **Testing Infrastructure:** No automated tests at MVP — agent logic is intentionally trivial; acceptance testing is manual run + AgentCore console verification
 - **Development Experience:** VS Code F5 via `.vscode/launch.json`; hot reload not applicable for CLI tool
 
@@ -148,31 +148,34 @@ strands-agents-demo/
 
 ### Model Provider Abstraction
 
-**Decision:** Two-variable env var pattern (`MODEL_PROVIDER` + `MODEL_ID`)
+**Decision:** Environment-variable-driven provider and model selection remains, but provider choice is routed through adapters behind a `Model` interface with explicit capability metadata rather than direct vendor branching in app logic.
 
 ```
-# Amazon Bedrock (primary)
+# Amazon Bedrock (primary MVP path)
 MODEL_PROVIDER=bedrock
 MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 AWS_REGION=us-east-1
 
-# Google Gemini (fallback)
+# Initial local Gemini adapter path
 MODEL_PROVIDER=gemini
 MODEL_ID=gemini-2.0-flash
 GOOGLE_API_KEY=your-key-here
 ```
 
-**Rationale:** Explicit `MODEL_PROVIDER` variable is self-documenting — a developer reading `.env.example` immediately understands which backend is active. Switching requires changing one variable. No code modification. Satisfies NFR10 and FR12.
+**Rationale:** Explicit `MODEL_PROVIDER` and `MODEL_ID` variables remain self-documenting, but the implementation now needs a stable abstraction boundary that can support Bedrock-first deployment, local adapter flexibility, and staged expansion toward Gemma, Moonshot AI, Llama, Qwen, and DeepSeek. Model switching remains configuration-driven only when the selected model/runtime combination is supported by the configured adapter path.
 
 **Agent code pattern:**
 ```python
-if os.environ["MODEL_PROVIDER"] == "gemini":
-    model = GeminiModel(model_id=os.environ["MODEL_ID"], ...)
-else:
-    model = BedrockModel(model_id=os.environ["MODEL_ID"], ...)
-
+adapter = create_local_model_adapter(os.environ["MODEL_PROVIDER"], os.environ)
+model = adapter.build()
 agent = Agent(model=model, tools=[get_today_date], ...)
 ```
+
+**Runtime architecture pattern:**
+- local path uses Strands-backed model adapters
+- deployed AgentCore path uses a runtime adapter contract
+- provider/model differences are normalized behind adapter boundaries
+- capability checks determine whether a given model/runtime combination is supported
 
 ### CLI Interaction Mode
 

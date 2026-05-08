@@ -154,11 +154,13 @@ The "aha moment" is not just seeing an agent run — it's seeing it run *reliabl
 
 - **Credentials:** AWS credentials and LLM API keys managed via environment variables. `.env.example` provided; `.env` excluded from version control.
 - **AWS Region:** `us-east-1` — primary deployment target.
-- **Model Selection:** Claude via Amazon Bedrock as primary LLM; Gemini free tier as documented fallback. Switching requires only an environment variable change.
+- **Model Selection:** The project uses a capability-driven model abstraction. Amazon Bedrock is the primary model access plane for MVP, with model selection controlled via environment variables and adapter-based model wiring. Initial local adapters support Bedrock and Gemini; the architecture is designed to expand toward Gemma, Moonshot AI, Llama, Qwen, and DeepSeek in staged increments.
 
 ### Integration Requirements
 
-- Amazon Bedrock (Claude) or Google Gemini API as the LLM backend
+- Amazon Bedrock as the primary LLM backend and deployment-aligned inference plane for MVP
+- Strands model adapters for local model construction
+- Optional future direct-provider or LiteLLM-based integrations where Bedrock capability gaps justify them
 - AWS AgentCore for production deployment and managed capabilities
 - Strands Agents SDK as the agent framework
 - No external databases, queues, or third-party APIs beyond the above
@@ -232,7 +234,7 @@ Documentation is a first-class deliverable:
 
 **Approach:** Problem-solving MVP — the simplest agent that fully demonstrates the Strands + AgentCore production lifecycle. Agent logic is intentionally trivial (age in days) so developers focus on the *pattern*, not the problem domain.
 
-**Resource Requirements:** Single developer, Python proficiency, AWS account with AgentCore access, Bedrock or Gemini API credentials.
+**Resource Requirements:** Single developer, Python proficiency, AWS account with AgentCore access, and credentials for the selected configured model path.
 
 ### MVP Feature Set (Phase 1)
 
@@ -243,7 +245,10 @@ Documentation is a first-class deliverable:
 - Natural language date of birth input handling
 - Graceful input validation and error responses
 - Environment-variable-driven configuration (model, region, API keys)
-- Claude (Bedrock) primary; Gemini free tier documented fallback
+- Capability-driven model abstraction for local model selection
+- Bedrock-first model support for MVP
+- Gemini retained as an initial local adapter path
+- Planned staged expansion path toward Gemma, Moonshot AI, Llama, Qwen, and DeepSeek
 - AgentCore deployment via IaC script — no manual console steps
 - VS Code launch configuration for local F5 debugging
 - Comprehensive README with ToC, setup, deployment, troubleshooting
@@ -267,7 +272,7 @@ Documentation is a first-class deliverable:
 
 ### Risk Mitigation
 
-- **Technical:** Pin to tested SDK versions; document known AgentCore limitations; Gemini fallback reduces LLM availability risk
+- **Technical:** Pin to tested SDK versions; document known AgentCore limitations; prefer Bedrock-first support for deployment-aligned stability; expand provider support in staged increments behind the adapter layer
 - **Market:** Reference implementation — success is developer adoption, not revenue
 - **Resource:** Phase 2 and 3 defer cleanly without affecting MVP value
 
@@ -295,7 +300,7 @@ Documentation is a first-class deliverable:
 
 ### Configuration Management
 
-- **FR12:** A developer configures the LLM provider (Claude via Bedrock or Gemini) via environment variables without modifying code
+- **FR12:** A developer configures the model provider and model identifier via environment variables and adapter-based model selection without modifying application logic
 - **FR13:** A developer configures the AWS region via environment variable
 - **FR14:** A developer configures all required API keys and credentials via environment variables
 - **FR15:** The project provides a `.env.example` documenting every required variable with description and example value
@@ -343,9 +348,9 @@ Documentation is a first-class deliverable:
 
 ### Integration
 
-- The agent functions correctly with Claude 3 Sonnet or Haiku via Amazon Bedrock
-- The agent functions correctly with Gemini free tier as the documented fallback
-- Model switching requires only an environment variable change — no code modification
+- The agent functions correctly with Bedrock-backed model support for MVP
+- Initial non-Bedrock local adapter support may be provided where documented
+- Model switching requires configuration changes only when the selected model/runtime combination is supported by the configured adapter path
 - AgentCore deployment is idempotent — re-running the script does not create duplicate resources or errors
 
 ### Code Quality & Maintainability

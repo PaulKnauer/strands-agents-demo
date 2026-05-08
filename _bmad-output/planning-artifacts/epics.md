@@ -26,7 +26,7 @@ FR8: The agent returns the age as a whole number of days
 FR9: A developer can define a custom tool using the Strands `@tool` decorator
 FR10: The agent invokes a registered tool during a conversation turn and uses the result in its response
 FR11: Tool invocations and results are captured and visible in AgentCore observability
-FR12: A developer configures the LLM provider (Claude via Bedrock or Gemini) via environment variables without modifying code
+FR12: A developer configures the model provider and model identifier via environment variables and adapter-based model selection without modifying application logic
 FR13: A developer configures the AWS region via environment variable
 FR14: A developer configures all required API keys and credentials via environment variables
 FR15: The project provides a `.env.example` documenting every required variable with description and example value
@@ -54,9 +54,9 @@ NFR4: `.env` is excluded from version control; `.env.example` contains no real c
 NFR5: No user input is logged in plaintext outside of AgentCore's managed observability context
 NFR6: The deployment script requests only the minimum IAM permissions required for AgentCore operation
 NFR7: README includes an explicit warning against committing credentials to version control
-NFR8: The agent functions correctly with Claude 3 Sonnet or Haiku via Amazon Bedrock
-NFR9: The agent functions correctly with Gemini free tier as the documented fallback
-NFR10: Model switching requires only an environment variable change — no code modification
+NFR8: The agent functions correctly with Bedrock-backed model support for MVP
+NFR9: Initial non-Bedrock local adapter support may be provided where documented
+NFR10: Model switching requires configuration changes only when the selected model/runtime combination is supported by the configured adapter path
 NFR11: AgentCore deployment is idempotent — re-running the script does not create duplicate resources or errors
 NFR12: Agent code is contained in a single readable file of under 150 lines
 NFR13: All files follow PEP 8
@@ -78,7 +78,7 @@ NFR16: The project can be forked and adapted to a different use case by modifyin
 - `deploy/deploy.py` must: check for existing agent (idempotency), create least-privilege IAM service role, register agent with AgentCore, output endpoint URL, print troubleshooting hints on common errors
 - Code formatter: `black` — run before completing any story
 - No automated tests at MVP — acceptance testing is manual run + AgentCore console verification
-- `.env.example` must group variables by: LLM Config, AWS Config, Optional (Gemini)
+- `.env.example` must group variables by: LLM Config, AWS Config, Optional local-adapter credentials as documented
 - `.vscode/launch.json` must use `envFile` key to load `.env` for F5 debugging
 - Implementation sequence: agent.py → requirements.txt + .env.example → .vscode/ → deploy/deploy.py → README.md (last, written against working code)
 
@@ -99,7 +99,7 @@ FR8: Epic 1 — Agent returns age as whole number of days
 FR9: Epic 1 — @tool decorator pattern demonstrated
 FR10: Epic 1 — Tool invoked during conversation turn, result used in response
 FR11: Epic 2 — AgentCore captures tool invocations and results automatically (zero custom code)
-FR12: Epic 1 — MODEL_PROVIDER + MODEL_ID env var pattern for LLM switching
+FR12: Epic 1 — adapter-based MODEL_PROVIDER + MODEL_ID configuration for supported model paths
 FR13: Epic 1 — AWS_REGION env var
 FR14: Epic 1 — All API keys and credentials via env vars (.env + load_dotenv)
 FR15: Epic 1 — .env.example with every variable documented (description + example)
@@ -122,7 +122,7 @@ FR29: Epic 3 — Self-explanatory project structure and file/folder names
 
 ### Epic 1: Local Agent — Working Age-in-Days Calculator
 
-A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, multi-provider model configuration (Bedrock primary, Gemini fallback), and VS Code F5 debugging.
+A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, capability-driven local model configuration with adapter-based provider selection, Bedrock-first support, initial Gemini local adapter support, and VS Code F5 debugging.
 
 **FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR10, FR12, FR13, FR14, FR15, FR16, FR17, FR18, FR19
 
@@ -144,9 +144,17 @@ A developer new to Strands and AgentCore can understand the complete project —
 
 ---
 
+### Epic 5: Multi-Provider Model Expansion
+
+A developer can extend the project beyond the initial Bedrock and Gemini support by adding or enabling staged support for additional model families such as Gemma, Moonshot AI, Llama, Qwen, and DeepSeek through the adapter and capability-gateway architecture.
+
+**FRs covered:** FR12, FR20, FR21
+
+---
+
 ## Epic 1: Local Agent — Working Age-in-Days Calculator
 
-A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, multi-provider model configuration (Bedrock primary, Gemini fallback), and VS Code F5 debugging.
+A developer can clone the repo, install dependencies, configure the environment, and run a fully functional age-in-days agent locally — complete with a custom `get_today_date` Strands tool, natural language date input handling, capability-driven local model configuration with adapter-based provider selection, Bedrock-first support, initial Gemini local adapter support, and VS Code F5 debugging.
 
 ### Story 1.1: Project Scaffold & Dependency Setup
 
@@ -166,7 +174,7 @@ So that I can install dependencies and begin developing without any undocumented
 
 **Given** I examine `.env.example`
 **When** I read it
-**Then** it contains all required variables (MODEL_PROVIDER, MODEL_ID, AWS_REGION, AGENT_NAME) with description comments above each, grouped by: LLM Config, AWS Config, and Optional (Gemini) — and contains no real credentials
+**Then** it contains all required variables (MODEL_PROVIDER, MODEL_ID, AWS_REGION, AGENT_NAME) with description comments above each, grouped by: LLM Config, AWS Config, and Optional local-adapter credentials — and contains no real credentials
 
 **Given** `.env.example` exists
 **When** I copy it to `.env` and fill in my credentials
@@ -212,9 +220,9 @@ So that I can run `python agent.py`, type my date of birth, and receive a correc
 **When** I read it
 **Then** `load_dotenv()` is called at module level before any `os.environ` access, required vars use `os.environ[]` (fail-fast), and `SYSTEM_PROMPT` is defined as an inline constant at the top of the file
 
-**Given** MODEL_PROVIDER=gemini is set in `.env` with a valid GOOGLE_API_KEY
+**Given** MODEL_PROVIDER selects an implemented local adapter path and the required credentials for that adapter are configured
 **When** I run `python agent.py`
-**Then** the agent starts and responds to date queries using the Gemini model — no code modification required
+**Then** the agent starts and responds to date queries using the configured adapter-supported model path — no application-logic code modification required
 
 **Given** the agent is running
 **When** I type "exit", "quit", or "q"
