@@ -1,7 +1,8 @@
 """Static file contract tests — verifies scaffold files satisfy their Story ACs.
 
 AC #2 (Story 1.1): requirements.txt contains pinned/minimum deps.
-AC #3 (Story 1.1): .env.example contains required section headers and variables.
+AC #3 (Story 1.1): .env.example contains required section headers, variables, and
+descriptive comments for the scaffold contract.
 AC #5 (Story 1.1): .gitignore excludes .env, __pycache__/, .venv/, *.pyc.
 AC #2 (Story 1.3): .vscode/launch.json has type=debugpy, console=integratedTerminal, envFile.
 AC #4 (Story 1.3): .vscode/extensions.json recommends ms-python.python and vscode-pylance.
@@ -54,6 +55,14 @@ class TestEnvExample:
     def _content(self) -> str:
         return (PROJECT_ROOT / ".env.example").read_text()
 
+    def _lines(self) -> list[str]:
+        return (PROJECT_ROOT / ".env.example").read_text().splitlines()
+
+    def _line_index(self, expected: str) -> int:
+        lines = self._lines()
+        assert expected in lines, f"Missing line in .env.example: {expected}"
+        return lines.index(expected)
+
     def test_has_llm_configuration_section(self):
         """AC #3 (Story 1.1): LLM Configuration section header must be present."""
         assert "# --- LLM Configuration ---" in self._content()
@@ -84,6 +93,44 @@ class TestEnvExample:
 
     def test_has_google_api_key_variable(self):
         assert "GOOGLE_API_KEY" in self._content()
+
+    def test_aws_region_has_description_comment_directly_above(self):
+        """AC #3 (Story 1.1): AWS_REGION must have a direct description comment."""
+        lines = self._lines()
+        index = self._line_index("AWS_REGION=us-east-1")
+        assert lines[index - 1] == (
+            "# AWS region for Bedrock API calls and AgentCore deployment"
+        )
+
+    def test_google_api_key_has_description_comment_directly_above(self):
+        """AC #3 (Story 1.1): GOOGLE_API_KEY must have a direct description comment."""
+        lines = self._lines()
+        index = self._line_index("# GOOGLE_API_KEY=your-gemini-api-key-here")
+        assert lines[index - 1] == (
+            "# Your Google AI Studio API key (required when MODEL_PROVIDER=gemini)"
+        )
+
+    def test_model_provider_comment_mentions_supported_providers(self):
+        """AC #3 (Story 1.1): MODEL_PROVIDER comment must document provider choices."""
+        lines = self._lines()
+        index = self._line_index("MODEL_PROVIDER=bedrock")
+        assert lines[index - 1] == (
+            '# Provider: "bedrock" (Amazon Bedrock) or "gemini" (Google Gemini)'
+        )
+
+    def test_model_id_comment_mentions_bedrock_and_gemini(self):
+        """AC #3 (Story 1.1): MODEL_ID comment must cover both local model paths."""
+        content = self._content()
+        assert '# Model ID — Bedrock: "anthropic.claude-3-haiku-20240307-v1:0"' in content
+        assert '#           — Gemini: "gemini-2.0-flash"' in content
+
+    def test_agent_name_comment_mentions_idempotency(self):
+        """AC #3 (Story 1.1): AGENT_NAME comment must describe deployment naming intent."""
+        lines = self._lines()
+        index = self._line_index("AGENT_NAME=age-in-days-demo")
+        assert lines[index - 1] == (
+            "# Name for your agent in AgentCore (used for idempotency check)"
+        )
 
     def test_no_real_aws_key_id(self):
         """AC #3 (Story 1.1): .env.example must not contain real AWS access key IDs."""
