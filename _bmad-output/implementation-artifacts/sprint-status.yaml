@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08 20:42:26 SAST
-last_updated: 2026-05-08 21:01:12 SAST
+last_updated: 2026-05-08 21:30:09 SAST
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   # Epic 1: Local Agent Experience
   epic-1: in-progress
   1-1-project-scaffold-and-configuration-contract: done
-  1-2-local-age-in-days-agent: backlog
+  1-2-local-age-in-days-agent: done
   1-3-adapter-based-local-model-selection: backlog
   1-4-vs-code-debug-experience: backlog
   epic-1-retrospective: optional
