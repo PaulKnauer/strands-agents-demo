@@ -215,6 +215,10 @@ class TestRunAgentGuardrails:
 
 
 class TestHandleInvocation:
+    @pytest.fixture(autouse=True)
+    def _set_model_provider(self, monkeypatch):
+        monkeypatch.setenv("MODEL_PROVIDER", "bedrock")
+
     @patch("deploy.app.boto3.client")
     def test_prompt_key_routed_to_agent(self, mock_client):
         mock_bedrock = MagicMock()
