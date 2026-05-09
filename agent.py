@@ -5,8 +5,8 @@ import datetime
 
 from compliance.hooks import AuditLoggingHook
 from dotenv import load_dotenv
+from model_adapters import create_local_model_adapter
 from strands import Agent, tool
-from strands.models import BedrockModel
 
 # load_dotenv() must be called before any os.environ access;
 # it populates the environment from the .env file silently if not found
@@ -34,37 +34,8 @@ def get_today_date() -> str:
 
 def create_agent():
     """Construct and return the agent. Deferred so import has no side effects."""
-    # os.environ[] raises KeyError on missing vars — fail-fast surfaces misconfiguration
-    # immediately rather than silently running with a wrong provider or unexpected default
-    provider = os.environ["MODEL_PROVIDER"]
-    if provider == "gemini":
-        from strands.models.gemini import (
-            GeminiModel,
-        )  # requires: pip install strands-agents[gemini]
-
-        model = GeminiModel(model_id=os.environ["MODEL_ID"])
-    elif provider == "bedrock":
-        # BedrockModel uses the default boto3 credential chain —
-        # no explicit credential passing needed
-        # Bedrock Guardrails are optional — only wired when GUARDRAIL_ID is configured.
-        # When absent the agent runs without content filtering (suitable for local dev).
-        # NIST MANAGE-2.2 / MANAGE-1.3: guardrails enforce content safety and PII
-        # anonymisation at the model layer with zero enforcement logic in application code.
-        guardrail_kwargs = {}
-        if guardrail_id := os.environ.get("GUARDRAIL_ID"):
-            guardrail_kwargs = {
-                "guardrail_id": guardrail_id,
-                "guardrail_version": os.environ.get("GUARDRAIL_VERSION", "DRAFT"),
-            }
-        model = BedrockModel(
-            model_id=os.environ["MODEL_ID"],
-            region_name=os.environ["AWS_REGION"],
-            **guardrail_kwargs,
-        )
-    else:
-        raise ValueError(
-            f"Unknown MODEL_PROVIDER: '{provider}'. Expected 'bedrock' or 'gemini'."
-        )
+    adapter = create_local_model_adapter(os.environ["MODEL_PROVIDER"], os.environ)
+    model = adapter.build()
     return Agent(
         model=model,
         tools=[get_today_date],

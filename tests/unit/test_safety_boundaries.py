@@ -56,7 +56,7 @@ class TestToolSurface:
                 },
                 clear=True,
             ),
-            patch("agent.BedrockModel"),
+            patch("model_adapters.BedrockModel"),
             patch("agent.Agent") as mock_agent_cls,
         ):
             # Ensure GUARDRAIL_ID is absent — test without guardrail kwargs (AC #4 from 4.3)

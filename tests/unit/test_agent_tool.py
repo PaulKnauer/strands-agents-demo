@@ -1,9 +1,9 @@
-"""Unit tests for agent.py — get_today_date tool, create_agent factory, run_repl loop."""
+"""Unit tests for agent.py — get_today_date tool, create_agent adapter delegation, run_repl loop."""
 
 import os
 import re
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 class TestGetTodayDate:
@@ -24,7 +24,41 @@ class TestGetTodayDate:
 
 
 class TestCreateAgent:
-    def test_unknown_provider_raises_value_error(self):
+    """create_agent() must delegate model construction to the adapter boundary."""
+
+    def test_delegates_to_adapter_and_passes_model_to_agent(self):
+        """create_agent() calls create_local_model_adapter and wires its model into Agent."""
+        from agent import create_agent
+
+        mock_model = MagicMock()
+        mock_adapter = MagicMock()
+        mock_adapter.build.return_value = mock_model
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MODEL_PROVIDER": "bedrock",
+                    "MODEL_ID": "some-model",
+                    "AWS_REGION": "us-east-1",
+                },
+                clear=True,
+            ),
+            patch(
+                "agent.create_local_model_adapter", return_value=mock_adapter
+            ) as mock_factory,
+            patch("agent.Agent") as mock_agent_cls,
+        ):
+            os.environ.pop("GUARDRAIL_ID", None)
+            create_agent()
+
+            mock_factory.assert_called_once_with("bedrock", os.environ)
+            mock_adapter.build.assert_called_once()
+            agent_kwargs = mock_agent_cls.call_args.kwargs
+            assert agent_kwargs["model"] is mock_model
+
+    def test_unknown_provider_propagates_value_error(self):
+        """Unsupported provider ValueError from adapter surfaces through create_agent()."""
         from agent import create_agent
 
         with patch.dict(
@@ -38,8 +72,12 @@ class TestCreateAgent:
             with pytest.raises(ValueError, match="Unknown MODEL_PROVIDER"):
                 create_agent()
 
-    def test_bedrock_provider_constructs_bedrock_model(self):
+    def test_agent_receives_get_today_date_tool(self):
+        """create_agent() must pass exactly [get_today_date] to Agent."""
         from agent import create_agent
+
+        mock_adapter = MagicMock()
+        mock_adapter.build.return_value = MagicMock()
 
         with (
             patch.dict(
@@ -51,131 +89,14 @@ class TestCreateAgent:
                 },
                 clear=True,
             ),
-            patch("agent.BedrockModel") as mock_bedrock_cls,
+            patch("agent.create_local_model_adapter", return_value=mock_adapter),
             patch("agent.Agent") as mock_agent_cls,
-        ):
-            # Ensure GUARDRAIL_ID is absent so no guardrail kwargs are passed (AC #4)
-            os.environ.pop("GUARDRAIL_ID", None)
-            create_agent()
-            kwargs = mock_bedrock_cls.call_args.kwargs
-            assert kwargs["model_id"] == "some-model"
-            assert kwargs["region_name"] == "us-east-1"
-            assert "guardrail_id" not in kwargs
-            assert "guardrail_version" not in kwargs
-            mock_agent_cls.assert_called_once()
-
-    def test_bedrock_with_guardrail_id_passes_guardrail_kwargs(self):
-        from agent import create_agent
-
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "MODEL_PROVIDER": "bedrock",
-                    "MODEL_ID": "some-model",
-                    "AWS_REGION": "us-east-1",
-                    "GUARDRAIL_ID": "test-guardrail-id",
-                    "GUARDRAIL_VERSION": "1",
-                },
-            ),
-            patch("agent.BedrockModel") as mock_bedrock_cls,
-            patch("agent.Agent"),
-        ):
-            create_agent()
-            kwargs = mock_bedrock_cls.call_args.kwargs
-            assert kwargs["guardrail_id"] == "test-guardrail-id"
-            assert kwargs["guardrail_version"] == "1"
-
-    def test_bedrock_without_guardrail_id_omits_guardrail_kwargs(self):
-        from agent import create_agent
-
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "MODEL_PROVIDER": "bedrock",
-                    "MODEL_ID": "some-model",
-                    "AWS_REGION": "us-east-1",
-                },
-                clear=True,
-            ),
-            patch("agent.BedrockModel") as mock_bedrock_cls,
-            patch("agent.Agent"),
         ):
             os.environ.pop("GUARDRAIL_ID", None)
             create_agent()
-            kwargs = mock_bedrock_cls.call_args.kwargs
-            assert "guardrail_id" not in kwargs
-            assert "guardrail_version" not in kwargs
-
-    def test_bedrock_guardrail_version_defaults_to_draft_when_unset(self):
-        from agent import create_agent
-
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "MODEL_PROVIDER": "bedrock",
-                    "MODEL_ID": "some-model",
-                    "AWS_REGION": "us-east-1",
-                    "GUARDRAIL_ID": "gid-123",
-                },
-            ),
-            patch("agent.BedrockModel") as mock_bedrock_cls,
-            patch("agent.Agent"),
-        ):
-            os.environ.pop("GUARDRAIL_VERSION", None)
-            create_agent()
-            kwargs = mock_bedrock_cls.call_args.kwargs
-            assert kwargs["guardrail_version"] == "DRAFT"
-
-    def test_gemini_provider_constructs_gemini_model(self):
-        from agent import create_agent
-
-        mock_gemini_cls = MagicMock()
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "MODEL_PROVIDER": "gemini",
-                    "MODEL_ID": "gemini-pro",
-                    "AWS_REGION": "us-east-1",
-                },
-            ),
-            patch.dict(
-                "sys.modules",
-                {"strands.models.gemini": MagicMock(GeminiModel=mock_gemini_cls)},
-            ),
-            patch("agent.Agent") as mock_agent_cls,
-        ):
-            create_agent()
-            mock_gemini_cls.assert_called_once_with(model_id="gemini-pro")
-            mock_agent_cls.assert_called_once()
-
-    def test_gemini_provider_ignores_guardrail_env_var(self):
-        from agent import create_agent
-
-        mock_gemini_cls = MagicMock()
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "MODEL_PROVIDER": "gemini",
-                    "MODEL_ID": "gemini-pro",
-                    "AWS_REGION": "us-east-1",
-                    "GUARDRAIL_ID": "should-be-ignored",
-                    "GUARDRAIL_VERSION": "1",
-                },
-            ),
-            patch.dict(
-                "sys.modules",
-                {"strands.models.gemini": MagicMock(GeminiModel=mock_gemini_cls)},
-            ),
-            patch("agent.Agent"),
-        ):
-            create_agent()
-            # GeminiModel must be called with model_id only — no guardrail kwargs
-            mock_gemini_cls.assert_called_once_with(model_id="gemini-pro")
+            tools = mock_agent_cls.call_args.kwargs["tools"]
+            assert len(tools) == 1
+            assert tools[0].__name__ == "get_today_date"
 
 
 class TestRunRepl:
