@@ -122,6 +122,14 @@ def _run_agent(prompt: str) -> str:
 @app.entrypoint
 def handle_invocation(payload: dict) -> str:
     """Process an AgentCore runtime invocation and return the agent response."""
+    model_provider = os.environ.get("MODEL_PROVIDER")
+    if not model_provider:
+        return "Error: MODEL_PROVIDER is required by the deployed runtime. Set MODEL_PROVIDER=bedrock."
+    if model_provider != "bedrock":
+        return (
+            f"Error: MODEL_PROVIDER='{model_provider}' is not supported by the deployed"
+            " runtime. Only 'bedrock' is supported."
+        )
     prompt = payload.get("prompt", "")
     if not prompt.strip():
         return "Error: empty prompt."

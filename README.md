@@ -313,7 +313,7 @@ Response printed to terminal
 
 In AgentCore (cloud), the same flow runs inside `deploy/app.py` via the Bedrock Converse API. Every step where the LLM calls `get_today_date` is automatically captured in the AgentCore console — input, output, and latency — with zero custom logging code.
 
-### Model provider switching
+### Model provider switching (local only)
 
 Change two env vars in `.env` — no code modification required:
 
@@ -328,6 +328,8 @@ MODEL_ID=gemini-2.0-flash
 GOOGLE_API_KEY=your-key-here
 # Also: pip install strands-agents[gemini]
 ```
+
+> **Note:** Provider switching applies to `agent.py` (local development) only. The AgentCore deployed runtime (`deploy/app.py`) uses Bedrock Converse directly and only supports `MODEL_PROVIDER=bedrock`. Multi-provider AgentCore support is planned for a future epic.
 
 ---
 

@@ -1,5 +1,5 @@
 # generated: 2026-05-08 20:42:26 SAST
-# last_updated: 2026-05-09 14:53:10 SAST
+# last_updated: 2026-05-09 15:32:09 SAST
 # project: strands-agents-demo
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08 20:42:26 SAST
-last_updated: 2026-05-09 14:53:10 SAST
+last_updated: 2026-05-09 15:32:09 SAST
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -53,7 +53,7 @@ development_status:
   # Epic 2: AgentCore Deployment and Observability
   epic-2: in-progress
   2-1-agentcore-deployment-path: done
-  2-2-deployed-runtime-adapter-contract: backlog
+  2-2-deployed-runtime-adapter-contract: done
   2-3-endpoint-verification-and-observability-confirmation: backlog
   epic-2-retrospective: optional
 

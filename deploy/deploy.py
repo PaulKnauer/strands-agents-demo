@@ -291,6 +291,18 @@ def main() -> None:
         print("   Hint: Copy .env.example to .env and fill in all required values.")
         sys.exit(1)
 
+    if model_provider != "bedrock":
+        print(
+            f"\n❌ Unsupported MODEL_PROVIDER for AgentCore deployment: '{model_provider}'"
+        )
+        print(
+            "   The AgentCore deployed runtime (deploy/app.py) uses Bedrock Converse"
+            " directly and only supports MODEL_PROVIDER=bedrock."
+        )
+        print("   Multi-provider AgentCore support is planned for Epic 4.")
+        print("   Set MODEL_PROVIDER=bedrock in your .env before deploying.")
+        sys.exit(1)
+
     # AgentCore runtime names must match [a-zA-Z][a-zA-Z0-9_]{0,47} — hyphens not allowed
     agent_name = agent_name_raw.replace("-", "_")
     if agent_name != agent_name_raw:
@@ -349,19 +361,19 @@ def main() -> None:
         "MODEL_ID": model_id,
         "AWS_REGION": aws_region,
     }
-    # Pass GOOGLE_API_KEY through if Gemini is the configured provider.
-    # Note: Gemini also requires `pip install strands-agents[gemini]` which is
-    # handled by the requirements.txt bundled in the deployment ZIP only if
-    # that optional extra is present — Bedrock is recommended for AgentCore deployments.
+    # GOOGLE_API_KEY passthrough is preserved for completeness, but the provider check
+    # above ensures MODEL_PROVIDER=bedrock before reaching this point. The deployed
+    # runtime (deploy/app.py) only supports Bedrock Converse — Gemini is local-only.
     google_api_key = os.environ.get("GOOGLE_API_KEY")
     if google_api_key:
         env_vars["GOOGLE_API_KEY"] = google_api_key
     network_config = {"networkMode": "PUBLIC"}
 
     # IAM roles are eventually consistent — the trust policy may not be assumable immediately
-    # after creation. Retry create/update on InvalidParameterException with a "role" message.
-    _MAX_IAM_RETRIES = 4
-    _IAM_RETRY_WAIT_S = 10
+    # after creation. Retry on InvalidParameterException or ValidationException with a "role"
+    # message. ValidationException is what AgentCore actually raises for new roles.
+    _MAX_IAM_RETRIES = 8
+    _IAM_RETRY_WAIT_S = 15
 
     try:
         existing_id, existing_arn = _find_existing_runtime(agentcore_ctrl, agent_name)
@@ -383,7 +395,7 @@ def main() -> None:
                     code = e.response["Error"]["Code"]
                     msg = e.response["Error"]["Message"]
                     if (
-                        code == "InvalidParameterException"
+                        code in ("InvalidParameterException", "ValidationException")
                         and "role" in msg.lower()
                         and attempt < _MAX_IAM_RETRIES - 1
                     ):

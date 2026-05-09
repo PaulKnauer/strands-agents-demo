@@ -155,7 +155,9 @@ class TestRunAgentGuardrails:
         mock_client.return_value = mock_bedrock
         mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
 
-        with patch.dict(os.environ, {"GUARDRAIL_ID": "gr-123", "GUARDRAIL_VERSION": "2"}):
+        with patch.dict(
+            os.environ, {"GUARDRAIL_ID": "gr-123", "GUARDRAIL_VERSION": "2"}
+        ):
             _run_agent("born 1 Jan 2020")
 
         kwargs = mock_bedrock.converse.call_args.kwargs
@@ -169,7 +171,9 @@ class TestRunAgentGuardrails:
         mock_client.return_value = mock_bedrock
         mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
 
-        with patch.dict(os.environ, {"MODEL_ID": "haiku", "AWS_REGION": "us-east-1"}, clear=True):
+        with patch.dict(
+            os.environ, {"MODEL_ID": "haiku", "AWS_REGION": "us-east-1"}, clear=True
+        ):
             _run_agent("born 1 Jan 2020")
 
         kwargs = mock_bedrock.converse.call_args.kwargs
@@ -198,7 +202,9 @@ class TestRunAgentGuardrails:
             _end_turn("Done."),
         ]
 
-        with patch.dict(os.environ, {"GUARDRAIL_ID": "gr-789", "GUARDRAIL_VERSION": "1"}):
+        with patch.dict(
+            os.environ, {"GUARDRAIL_ID": "gr-789", "GUARDRAIL_VERSION": "1"}
+        ):
             _run_agent("born 1 Jan 2020")
 
         for call in mock_bedrock.converse.call_args_list:
@@ -233,3 +239,24 @@ class TestHandleInvocation:
         """AC #7 (Story 2.1): prompt > 4000 chars → error string, no Bedrock call."""
         result = handle_invocation({"prompt": "x" * 4001})
         assert "4000" in result
+
+    def test_missing_model_provider_returns_error(self):
+        """AC #2 (Story 2.2): Missing MODEL_PROVIDER must return a clear error, no Bedrock fallback."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+        assert result.startswith("Error:")
+        assert "MODEL_PROVIDER" in result
+
+    def test_non_bedrock_provider_returns_error(self):
+        """AC #2 (Story 2.2): MODEL_PROVIDER='gemini' must return a clear error, not silently use Bedrock."""
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "gemini"}):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+        assert result.startswith("Error:")
+        assert "gemini" in result
+
+    def test_unknown_provider_returns_error(self):
+        """AC #2 (Story 2.2): Unknown MODEL_PROVIDER must return a clear error, no Bedrock call."""
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "openai"}):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+        assert result.startswith("Error:")
+        assert "openai" in result

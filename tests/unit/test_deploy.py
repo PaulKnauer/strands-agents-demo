@@ -290,6 +290,24 @@ class TestMainEnvValidation:
         out = capsys.readouterr().out
         assert ".env" in out
 
+    def test_non_bedrock_model_provider_exits_1(self, capsys):
+        """AC #2 (Story 2.2): MODEL_PROVIDER != 'bedrock' must fail deployment with a clear error."""
+        code = self._run_main_no_env(
+            {
+                "AWS_REGION": "us-east-1",
+                "AGENT_NAME": "test-agent",
+                "MODEL_ID": "some-model",
+                "MODEL_PROVIDER": "gemini",
+            }
+        )
+        assert code == 1
+        out = capsys.readouterr().out
+        assert (
+            "gemini" in out.lower()
+            or "MODEL_PROVIDER" in out
+            or "bedrock" in out.lower()
+        )
+
 
 # ── main() — idempotency (create vs update) ───────────────────────────────────
 

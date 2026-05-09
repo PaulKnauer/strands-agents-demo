@@ -13,6 +13,7 @@ AC references: Story 3.3 AC #6.
 
 import json
 import pathlib
+import ast
 
 PROJECT_ROOT = pathlib.Path(__file__).parent.parent.parent
 assert (
@@ -235,3 +236,63 @@ class TestAgentPyConstraints:
             f"agent.py has {len(lines)} lines — exceeds 150-line architectural limit. "
             "Extract tools to tools.py if the file grows beyond this."
         )
+
+
+# ── deploy/app.py import isolation ───────────────────────────────────────────
+
+
+class TestDeployAppImports:
+    """Verify deploy/app.py does not import local Strands runtime modules.
+
+    AC #1 (Story 2.2): the deployed runtime must be isolated from agent.py,
+    model_adapters.py, and strands-agents. Those packages are absent in the
+    AgentCore PYTHON_3_12 runtime, so importing them would cause an ImportError
+    at startup and violates the local/cloud boundary established by this project.
+    """
+
+    def _source(self) -> str:
+        return (PROJECT_ROOT / "deploy" / "app.py").read_text()
+
+    def _imported_modules(self) -> set[str]:
+        tree = ast.parse(self._source())
+        modules = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules.add(node.module)
+        return modules
+
+    def test_does_not_import_strands(self):
+        """deploy/app.py must not import strands — the Strands SDK is not available in AgentCore."""
+        imports = self._imported_modules()
+        assert "strands" not in imports and not any(
+            module.startswith("strands.") for module in imports
+        ), (
+            "deploy/app.py must not import strands. "
+            "The deployed runtime uses boto3 Converse directly."
+        )
+
+    def test_does_not_import_agent(self):
+        """deploy/app.py must not import agent — agent.py is local-REPL only."""
+        assert "agent" not in self._imported_modules(), (
+            "deploy/app.py must not import agent. "
+            "agent.py is local-REPL only and must not be bundled in the deployment ZIP."
+        )
+
+    def test_does_not_import_model_adapters(self):
+        """deploy/app.py must not import model_adapters — the local adapter factory must not reach AgentCore."""
+        assert "model_adapters" not in self._imported_modules(), (
+            "deploy/app.py must not import model_adapters. "
+            "The local adapter factory must not be used in the deployed runtime."
+        )
+
+    def test_uses_bedrock_agentcore_and_boto3(self):
+        """deploy/app.py must import bedrock_agentcore and boto3 — these are the deployed runtime dependencies."""
+        source = self._source()
+        assert (
+            "bedrock_agentcore" in source
+        ), "deploy/app.py must import bedrock_agentcore (the AgentCore SDK)."
+        assert (
+            "import boto3" in source
+        ), "deploy/app.py must import boto3 (for Bedrock Converse API calls)."
