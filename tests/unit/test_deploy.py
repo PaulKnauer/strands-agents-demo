@@ -5,6 +5,7 @@ AC #4 (Story 2.1): troubleshooting hints for common AWS errors.
 AC #3 (Story 2.1): idempotency — update, not duplicate, on re-deploy.
 """
 
+import json
 import os
 import sys
 import pytest
@@ -12,6 +13,8 @@ from unittest.mock import MagicMock, patch, call
 from botocore.exceptions import ClientError
 
 from deploy.deploy import (
+    _build_artifact,
+    _ensure_iam_role,
     _find_existing_runtime,
     _handle_client_error,
     _wait_for_ready,
@@ -380,3 +383,164 @@ class TestMainIdempotency:
 
         ctrl.update_agent_runtime.assert_called_once()
         ctrl.create_agent_runtime.assert_not_called()
+
+
+# ── _build_artifact ───────────────────────────────────────────────────────────
+
+
+class TestBuildArtifact:
+    def test_runtime_is_python_312(self):
+        artifact = _build_artifact("my-bucket", "my-key/deployment.zip")
+        assert artifact["codeConfiguration"]["runtime"] == "PYTHON_3_12"
+
+    def test_entry_point_is_single_element_app_py(self):
+        """Entry point must be ["app.py"], not ["python", "app.py"] — AgentCore validation."""
+        artifact = _build_artifact("my-bucket", "my-key/deployment.zip")
+        assert artifact["codeConfiguration"]["entryPoint"] == ["app.py"]
+
+    def test_uses_s3_source_with_correct_bucket_and_key(self):
+        artifact = _build_artifact("test-bucket", "agent/deployment.zip")
+        s3 = artifact["codeConfiguration"]["code"]["s3"]
+        assert s3["bucket"] == "test-bucket"
+        assert s3["prefix"] == "agent/deployment.zip"
+
+
+# ── _ensure_iam_role ──────────────────────────────────────────────────────────
+
+
+class TestEnsureIamRole:
+    def _make_iam(self, existing_arn=None):
+        iam = MagicMock()
+        NoSuchEntityException = type("NoSuchEntityException", (Exception,), {})
+        iam.exceptions.NoSuchEntityException = NoSuchEntityException
+        if existing_arn:
+            iam.get_role.return_value = {"Role": {"Arn": existing_arn}}
+        else:
+            iam.get_role.side_effect = NoSuchEntityException()
+            iam.create_role.return_value = {
+                "Role": {"Arn": "arn:aws:iam::123456789012:role/new"}
+            }
+        return iam
+
+    def test_model_arn_is_specific_not_wildcard(self):
+        """bedrock:InvokeModel Resource must be scoped to the model ARN, never '*'."""
+        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
+        _ensure_iam_role(
+            iam,
+            "r",
+            "us-east-1",
+            "123456789012",
+            "anthropic.claude-3-haiku-20240307-v1:0",
+            "test_agent",
+        )
+        policy = json.loads(iam.put_role_policy.call_args[1]["PolicyDocument"])
+        invoke_stmt = next(
+            s for s in policy["Statement"] if s["Action"] == "bedrock:InvokeModel"
+        )
+        assert invoke_stmt["Resource"] == (
+            "arn:aws:bedrock:us-east-1::foundation-model/"
+            "anthropic.claude-3-haiku-20240307-v1:0"
+        )
+
+    def test_agentcore_resource_is_scoped_not_wildcard(self):
+        """bedrock-agentcore:* Resource must be scoped to the runtime prefix, never '*'."""
+        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
+        _ensure_iam_role(
+            iam, "r", "us-east-1", "123456789012", "some-model", "test_agent"
+        )
+        policy = json.loads(iam.put_role_policy.call_args[1]["PolicyDocument"])
+        agentcore_stmt = next(
+            s for s in policy["Statement"] if s["Action"] == "bedrock-agentcore:*"
+        )
+        assert (
+            agentcore_stmt["Resource"]
+            == "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/test_agent*"
+        )
+
+    def test_existing_role_reused_not_duplicated(self):
+        """get_role succeeds → create_role must NOT be called (idempotency)."""
+        iam = self._make_iam("arn:aws:iam::123456789012:role/existing")
+        _ensure_iam_role(iam, "existing", "us-east-1", "123456789012", "model", "agent")
+        iam.create_role.assert_not_called()
+        iam.put_role_policy.assert_called_once()
+
+    def test_new_role_created_when_missing(self):
+        """get_role raises NoSuchEntityException → create_role must be called."""
+        iam = self._make_iam()
+        arn = _ensure_iam_role(
+            iam, "new-role", "us-east-1", "123456789012", "model", "agent"
+        )
+        iam.create_role.assert_called_once()
+        assert arn == "arn:aws:iam::123456789012:role/new"
+
+    def test_inline_policy_always_updated(self):
+        """put_role_policy is called on every deploy, for both new and existing roles."""
+        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
+        _ensure_iam_role(iam, "r", "us-east-1", "123456789012", "model", "agent")
+        iam.put_role_policy.assert_called_once()
+
+
+# ── main() — endpoint output ──────────────────────────────────────────────────
+
+
+class TestEndpointOutput:
+    """Verify main() prints required deployment details on successful deployment."""
+
+    def _make_boto3_factory(self, sts, s3, iam, ctrl):
+        def factory(service_name, **kwargs):
+            if service_name == "sts":
+                return sts
+            if service_name == "s3":
+                return s3
+            if service_name == "iam":
+                return iam
+            if service_name == "bedrock-agentcore-control":
+                return ctrl
+            return MagicMock()
+
+        return factory
+
+    @patch("deploy.deploy.load_dotenv")
+    @patch("deploy.deploy._build_deployment_zip", return_value=b"zipbytes")
+    def test_endpoint_url_url_encodes_arn(self, mock_zip, mock_dotenv, capsys):
+        sts = MagicMock()
+        sts.get_caller_identity.return_value = {"Account": "123456789012"}
+        s3 = MagicMock()
+        s3.head_bucket.return_value = {}
+        iam = MagicMock()
+        iam.get_role.return_value = {
+            "Role": {"Arn": "arn:aws:iam::123456789012:role/r"}
+        }
+        iam.exceptions.NoSuchEntityException = type(
+            "NoSuchEntityException", (Exception,), {}
+        )
+        ctrl = MagicMock()
+        agent_arn = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/rt-abc"
+        ctrl.list_agent_runtimes.return_value = {"agentRuntimes": []}
+        ctrl.create_agent_runtime.return_value = {
+            "agentRuntimeId": "rt-abc",
+            "agentRuntimeArn": agent_arn,
+        }
+        ctrl.get_agent_runtime.return_value = {"status": "READY"}
+
+        with (
+            patch.dict(os.environ, ENV, clear=True),
+            patch(
+                "deploy.deploy.boto3.client",
+                side_effect=self._make_boto3_factory(sts, s3, iam, ctrl),
+            ),
+            patch("deploy.deploy.time.sleep"),
+        ):
+            from deploy.deploy import main
+
+            main()
+
+        out = capsys.readouterr().out
+        # Colons and slashes in ARN must be percent-encoded in the URL path segment
+        assert (
+            "arn%3Aaws%3Abedrock-agentcore%3Aus-east-1%3A123456789012%3Aruntime%2Frt-abc"
+            in out
+        )
+        assert "Agent Name" in out
+        assert "Runtime ID" in out
+        assert "Runtime ARN" in out

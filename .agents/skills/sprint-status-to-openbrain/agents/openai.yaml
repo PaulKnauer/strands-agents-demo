@@ -1,0 +1,13 @@
+interface:
+  display_name: "Sprint Status to OpenBrain"
+  short_description: "Capture BMad sprint status in OpenBrain"
+  default_prompt: "Use $sprint-status-to-openbrain to run sprint status here and save the result to OpenBrain."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "OpenBrain"
+      description: "OpenBrain MCP connector for capturing sprint status thoughts"
+
+policy:
+  allow_implicit_invocation: true
