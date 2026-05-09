@@ -4,8 +4,8 @@ AC #2 (Story 1.1): requirements.txt contains pinned/minimum deps.
 AC #3 (Story 1.1): .env.example contains required section headers, variables, and
 descriptive comments for the scaffold contract.
 AC #5 (Story 1.1): .gitignore excludes .env, __pycache__/, .venv/, *.pyc.
-AC #2 (Story 1.3): .vscode/launch.json has type=debugpy, console=integratedTerminal, envFile.
-AC #4 (Story 1.3): .vscode/extensions.json recommends ms-python.python and vscode-pylance.
+AC #1 (Story 1.4): .vscode/launch.json has type=debugpy, console=integratedTerminal, envFile.
+AC #1 (Story 1.4): .vscode/extensions.json recommends ms-python.python and vscode-pylance.
 AC #6 (Story 1.2): agent.py is under 150 lines.
 
 AC references: Story 3.3 AC #6.
@@ -121,7 +121,9 @@ class TestEnvExample:
     def test_model_id_comment_mentions_bedrock_and_gemini(self):
         """AC #3 (Story 1.1): MODEL_ID comment must cover both local model paths."""
         content = self._content()
-        assert '# Model ID — Bedrock: "anthropic.claude-3-haiku-20240307-v1:0"' in content
+        assert (
+            '# Model ID — Bedrock: "anthropic.claude-3-haiku-20240307-v1:0"' in content
+        )
         assert '#           — Gemini: "gemini-2.0-flash"' in content
 
     def test_agent_name_comment_mentions_idempotency(self):
@@ -183,22 +185,26 @@ class TestVSCodeLaunchJson:
         return configs[0]
 
     def test_type_is_debugpy(self):
-        """AC #2 (Story 1.3): debugger type must be debugpy."""
+        """AC #1 (Story 1.4): debugger type must be debugpy."""
         assert self._first_config()["type"] == "debugpy"
 
+    def test_request_is_launch(self):
+        """AC #1 (Story 1.4): debugger request must launch agent.py."""
+        assert self._first_config()["request"] == "launch"
+
     def test_console_is_integrated_terminal(self):
-        """AC #2 (Story 1.3): console must be integratedTerminal (required for input() REPL)."""
+        """AC #2 (Story 1.4): console must be integratedTerminal (required for input() REPL)."""
         assert self._first_config()["console"] == "integratedTerminal"
 
     def test_env_file_references_dotenv(self):
-        """AC #2 (Story 1.3): envFile must reference .env."""
+        """AC #1 (Story 1.4): envFile must reference .env."""
         env_file = self._first_config().get("envFile", "")
-        assert ".env" in env_file
+        assert env_file == "${workspaceFolder}/.env"
 
     def test_program_points_to_agent_py(self):
-        """AC #1 (Story 1.3): program must launch agent.py."""
+        """AC #1 (Story 1.4): program must launch agent.py."""
         program = self._first_config().get("program", "")
-        assert "agent.py" in program
+        assert program == "${workspaceFolder}/agent.py"
 
 
 # ── .vscode/extensions.json ───────────────────────────────────────────────────
@@ -210,11 +216,11 @@ class TestVSCodeExtensionsJson:
         return json.loads(path.read_text()).get("recommendations", [])
 
     def test_recommends_python_extension(self):
-        """AC #4 (Story 1.3): ms-python.python must be recommended."""
+        """AC #1 (Story 1.4): ms-python.python must be recommended."""
         assert "ms-python.python" in self._recommendations()
 
     def test_recommends_pylance(self):
-        """AC #4 (Story 1.3): ms-python.vscode-pylance must be recommended."""
+        """AC #1 (Story 1.4): ms-python.vscode-pylance must be recommended."""
         assert "ms-python.vscode-pylance" in self._recommendations()
 
 
