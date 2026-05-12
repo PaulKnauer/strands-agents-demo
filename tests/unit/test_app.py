@@ -3,8 +3,15 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
+from botocore.exceptions import ClientError
 
-from deploy.app import _get_today_date, _run_agent, handle_invocation
+from deploy.app import (
+    _format_age_response,
+    _get_today_date,
+    _parse_date_of_birth,
+    _run_agent,
+    handle_invocation,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,15 +53,50 @@ class TestGetTodayDate:
         result = _get_today_date()
         assert re.match(r"^\d{4}-\d{2}-\d{2}$", result), f"Not ISO date: {result}"
 
+    def test_uses_utc_date(self):
+        import datetime
+
+        real_datetime = datetime.datetime
+        with patch("deploy.app.datetime.datetime") as mock_datetime:
+            mock_datetime.now.return_value = real_datetime(
+                2026, 3, 14, 23, 30, tzinfo=datetime.UTC
+            )
+            result = _get_today_date()
+
+        assert result == "2026-03-14"
+        mock_datetime.now.assert_called_once_with(datetime.UTC)
+
     def test_returns_error_string_on_exception(self):
-        with patch("deploy.app.datetime.date") as mock_date:
-            mock_date.today.side_effect = Exception("system clock failure")
+        with patch("deploy.app.datetime.datetime") as mock_datetime:
+            mock_datetime.now.side_effect = Exception("system clock failure")
             result = _get_today_date()
         assert result.startswith("Error retrieving today's date:")
         assert "system clock failure" in result
 
 
 # ── _run_agent ────────────────────────────────────────────────────────────────
+
+
+class TestDateParsing:
+    def test_parses_named_date_with_ordinal(self):
+        assert (
+            str(_parse_date_of_birth("I was born on 14th March 1990")) == "1990-03-14"
+        )
+
+    def test_parses_dd_mm_yyyy(self):
+        assert str(_parse_date_of_birth("DOB 14/03/1990")) == "1990-03-14"
+
+    def test_rejects_invalid_date(self):
+        assert _parse_date_of_birth("I was born on 31st February 1990") is None
+
+    def test_formats_age_with_date_arithmetic(self):
+        import datetime
+
+        response = _format_age_response(
+            datetime.date(1990, 3, 14), datetime.date(2026, 5, 10)
+        )
+
+        assert "13,206 days old" in response
 
 
 class TestRunAgent:
@@ -70,18 +112,18 @@ class TestRunAgent:
         assert mock_bedrock.converse.call_count == 1
 
     @patch("deploy.app.boto3.client")
-    def test_tool_use_then_end_turn(self, mock_client):
+    def test_tool_use_returns_deterministic_age_without_second_model_turn(
+        self, mock_client
+    ):
         mock_bedrock = MagicMock()
         mock_client.return_value = mock_bedrock
-        mock_bedrock.converse.side_effect = [
-            _tool_use("tu-001"),
-            _end_turn("You are 13149 days old."),
-        ]
+        mock_bedrock.converse.return_value = _tool_use("tu-001")
 
-        result = _run_agent("I was born on 14 March 1990")
+        with patch("deploy.app._get_today_date", return_value="2026-05-10"):
+            result = _run_agent("I was born on 14th March 1990")
 
-        assert result == "You are 13149 days old."
-        assert mock_bedrock.converse.call_count == 2
+        assert "13,206 days old" in result
+        assert mock_bedrock.converse.call_count == 1
 
     @patch("deploy.app.boto3.client")
     def test_tool_result_injected_correctly(self, mock_client):
@@ -228,6 +270,26 @@ class TestHandleInvocation:
         result = handle_invocation({"prompt": "born 1 Jan 2020"})
 
         assert result == "You are 1000 days old."
+
+    @patch("deploy.app.boto3.client")
+    def test_bedrock_client_error_returns_actionable_error(self, mock_client):
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.side_effect = ClientError(
+            {
+                "Error": {
+                    "Code": "ResourceNotFoundException",
+                    "Message": "legacy model denied",
+                }
+            },
+            "Converse",
+        )
+
+        result = handle_invocation({"prompt": "born 1 Jan 2020"})
+
+        assert result.startswith("Error invoking Bedrock model")
+        assert "MODEL_ID" in result
+        assert "bedrock:InvokeModel" in result
 
     def test_missing_prompt_key_returns_error(self):
         """AC #7 (Story 2.1): missing prompt key → error string, no Bedrock call."""

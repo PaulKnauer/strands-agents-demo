@@ -26,10 +26,14 @@ help:
 	@echo "  Deployment"
 	@echo "    make guardrail    Create/update Bedrock Guardrail stack and print outputs"
 	@echo "    make redteam-role Deploy GitHub Actions OIDC role for scheduled red-team CI"
+	@echo "    make transaction-search Enable CloudWatch Transaction Search for AgentCore observability"
+	@echo "    make create-role  Deploy AgentCore runtime IAM role via CDK"
 	@echo "    make deploy       Deploy agent to AWS AgentCore"
 	@echo "    make verify       Invoke deployed agent and verify response"
 	@echo "    make teardown     Remove all AWS resources created by deploy"
+	@echo "    make teardown-role Remove AgentCore runtime IAM role stack"
 	@echo "    make teardown-redteam-role  Remove GitHub Actions OIDC role stack"
+	@echo "    make teardown-transaction-search  Disable Transaction Search CDK stack resources"
 	@echo "    make redteam      Run promptfoo red-team scan (requires Node.js + AWS auth)"
 	@echo "    make dashboard    Create/update CloudWatch NIST-RMF compliance dashboard"
 	@echo ""
@@ -64,11 +68,11 @@ run:
 
 .PHONY: format
 format:
-	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/github_actions_stack.py
+	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
 
 .PHONY: lint
 lint:
-	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/github_actions_stack.py
+	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
 
 .PHONY: test-unit
 test-unit:
@@ -97,13 +101,33 @@ redteam-role:
 	$(PIP) install -r infra/requirements.txt
 	npx --yes aws-cdk@2 deploy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --require-approval never
 
+.PHONY: transaction-search
+transaction-search:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 deploy StrandsDemoTransactionSearchStack --app "$(PYTHON) infra/app.py" --require-approval never
+
 .PHONY: teardown-redteam-role
 teardown-redteam-role:
 	$(PIP) install -r infra/requirements.txt
 	npx --yes aws-cdk@2 destroy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --force
 
+.PHONY: teardown-transaction-search
+teardown-transaction-search:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 destroy StrandsDemoTransactionSearchStack --app "$(PYTHON) infra/app.py" --force
+
+.PHONY: create-role
+create-role:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 deploy StrandsDemoAgentCoreRuntimeRoleStack --app "$(PYTHON) infra/app.py" --require-approval never
+
+.PHONY: teardown-role
+teardown-role:
+	$(PIP) install -r infra/requirements.txt
+	npx --yes aws-cdk@2 destroy StrandsDemoAgentCoreRuntimeRoleStack --app "$(PYTHON) infra/app.py" --force
+
 .PHONY: deploy
-deploy:
+deploy: create-role
 	$(PYTHON) deploy/deploy.py
 
 .PHONY: verify

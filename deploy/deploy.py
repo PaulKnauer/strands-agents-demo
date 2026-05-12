@@ -18,6 +18,32 @@ from dotenv import load_dotenv
 # it populates the environment from the .env file silently if not found
 load_dotenv()
 
+DEFAULT_MODEL_ID = "us.amazon.nova-micro-v1:0"
+_US_INFERENCE_PROFILE_REGIONS = ("us-east-1", "us-east-2", "us-west-2")
+_RUNTIME_ROLE_STACK_NAME = "StrandsDemoAgentCoreRuntimeRoleStack"
+
+
+def _bedrock_model_resources(
+    aws_region: str, account_id: str, model_id: str
+) -> list[str]:
+    """Return Bedrock InvokeModel resources for a model or inference profile."""
+    if model_id.startswith("us."):
+        base_model_id = model_id.removeprefix("us.")
+        return [
+            f"arn:aws:bedrock:{aws_region}:{account_id}:inference-profile/{model_id}",
+            *[
+                f"arn:aws:bedrock:{region}::foundation-model/{base_model_id}"
+                for region in _US_INFERENCE_PROFILE_REGIONS
+            ],
+        ]
+    if model_id.startswith("global."):
+        base_model_id = model_id.removeprefix("global.")
+        return [
+            f"arn:aws:bedrock:{aws_region}:{account_id}:inference-profile/{model_id}",
+            f"arn:aws:bedrock:*::foundation-model/{base_model_id}",
+        ]
+    return [f"arn:aws:bedrock:{aws_region}::foundation-model/{model_id}"]
+
 
 def _ensure_s3_bucket(s3, bucket_name: str, region: str, account_id: str) -> None:
     """Create the S3 bucket if it does not already exist."""
@@ -55,9 +81,11 @@ def _build_deployment_zip(project_root: str) -> bytes:
 
     agent.py is intentionally excluded — it imports strands-agents (not present in
     the runtime) and is local-REPL only. app.py is the cloud entrypoint.
+    bootstrap.py is bundled as the AgentCore entrypoint so ADOT auto-instrumentation
+    starts before app.py imports boto3 or the BedrockAgentCore SDK.
 
     Dependencies (including boto3 via bedrock-agentcore's transitive deps) are
-    resolved and downloaded for the linux/x86_64 (manylinux2014) platform at
+    resolved and downloaded for the Linux ARM64 (manylinux2014_aarch64) platform at
     deploy-time using pip's cross-platform wheel support, then bundled into the zip.
     boto3 must be bundled — it is NOT reliably pre-installed in PYTHON_3_12 despite
     documentation suggesting otherwise (confirmed during deployment testing).
@@ -71,7 +99,7 @@ def _build_deployment_zip(project_root: str) -> bytes:
     buf = io.BytesIO()
     with tempfile.TemporaryDirectory() as pkg_dir:
         print(
-            "  Pre-installing bedrock-agentcore (linux/x86_64 wheels) into deployment package..."
+            "  Pre-installing bedrock-agentcore (Linux ARM64 wheels) into deployment package..."
         )
         subprocess.run(
             [
@@ -80,10 +108,11 @@ def _build_deployment_zip(project_root: str) -> bytes:
                 "pip",
                 "install",
                 "bedrock-agentcore",
+                "aws-opentelemetry-distro>=0.10.0",
                 "--target",
                 pkg_dir,
                 "--platform",
-                "manylinux2014_x86_64",
+                "manylinux2014_aarch64",
                 "--python-version",
                 "312",
                 "--only-binary",
@@ -99,6 +128,10 @@ def _build_deployment_zip(project_root: str) -> bytes:
             # app.py is the cloud entrypoint — agent.py is local-REPL only and must not be bundled
             # (it imports strands-agents which is not present in the runtime, causing ImportError)
             zf.write(os.path.join(project_root, "deploy", "app.py"), arcname="app.py")
+            zf.write(
+                os.path.join(project_root, "deploy", "bootstrap.py"),
+                arcname="bootstrap.py",
+            )
             # Bundle all installed packages at zip root.
             # Skip __pycache__ dirs and .pyc/.pyo files — bytecode is Python
             # version-specific and compiled for the local interpreter, not the
@@ -115,72 +148,36 @@ def _build_deployment_zip(project_root: str) -> bytes:
     return buf.getvalue()
 
 
-def _ensure_iam_role(
-    iam,
-    role_name: str,
-    aws_region: str,
-    account_id: str,
-    model_id: str,
-    agent_name: str,
-) -> str:
-    """Create or update the least-privilege IAM execution role for the AgentCore runtime.
-
-    Returns the role ARN.
-    """
-    trust_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {"Service": "bedrock-agentcore.amazonaws.com"},
-                "Action": "sts:AssumeRole",
-            }
-        ],
-    }
-
-    # Scoped to the specific model and agent resource — no wildcard Resources (least-privilege)
-    model_arn = f"arn:aws:bedrock:{aws_region}::foundation-model/{model_id}"
-    agent_resource = (
-        f"arn:aws:bedrock-agentcore:{aws_region}:{account_id}:runtime/{agent_name}*"
-    )
-    permission_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Action": "bedrock:InvokeModel",
-                "Resource": model_arn,
-            },
-            {
-                "Effect": "Allow",
-                "Action": "bedrock-agentcore:*",
-                "Resource": agent_resource,
-            },
-        ],
-    }
-
+def _get_runtime_role_arn(cloudformation, stack_name: str) -> str:
+    """Return the runtime role ARN from the CDK stack outputs."""
     try:
-        response = iam.get_role(RoleName=role_name)
-        role_arn = response["Role"]["Arn"]
-        print(f"  IAM role exists: {role_name}")
-    except iam.exceptions.NoSuchEntityException:
-        # Role does not exist — create it with the trust policy
-        response = iam.create_role(
-            RoleName=role_name,
-            AssumeRolePolicyDocument=json.dumps(trust_policy),
-            Description="Least-privilege execution role for AgentCore age-in-days-demo runtime",
-        )
-        role_arn = response["Role"]["Arn"]
-        print(f"  Created IAM role: {role_name}")
+        response = cloudformation.describe_stacks(StackName=stack_name)
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code == "ValidationError":
+            print(f"\n❌ Required IAM role stack not found: {stack_name}")
+            print(
+                "   Hint: Provision the runtime role through CDK first with 'make create-role'."
+            )
+            sys.exit(1)
+        raise
 
-    # Always update the inline policy so any permission changes take effect on re-deploy
-    iam.put_role_policy(
-        RoleName=role_name,
-        PolicyName=f"{role_name}-policy",
-        PolicyDocument=json.dumps(permission_policy),
+    outputs = {
+        item["OutputKey"]: item["OutputValue"]
+        for item in response["Stacks"][0].get("Outputs", [])
+    }
+    role_arn = outputs.get("AgentCoreRuntimeRoleArn")
+    role_name = outputs.get("AgentCoreRuntimeRoleName")
+    if role_arn:
+        label = role_name or role_arn
+        print(f"  IAM role exists (CDK-managed): {label}")
+        return role_arn
+
+    print(f"\n❌ Required IAM role output not found in stack: {stack_name}")
+    print(
+        "   Hint: Re-run 'make create-role' so the CDK stack publishes AgentCoreRuntimeRoleArn."
     )
-    print(f"  IAM inline policy updated for role: {role_name}")
-    return role_arn
+    sys.exit(1)
 
 
 def _find_existing_runtime(agentcore_ctrl, agent_name: str):
@@ -211,11 +208,9 @@ def _build_artifact(s3_bucket: str, s3_key: str) -> dict:
             "code": {"s3": {"bucket": s3_bucket, "prefix": s3_key}},
             # PYTHON_3_12 is the latest stable runtime available in AgentCore
             "runtime": "PYTHON_3_12",
-            # Install third-party dependencies before starting the app.
-            # strands-agents and python-dotenv are not pre-installed in the runtime.
-            # Single-element list — AgentCore joins multi-element arrays with spaces
-            # which fails validation. PYTHON_3_12 runtime invokes the script with python.
-            "entryPoint": ["app.py"],
+            # Single-element list — AgentCore expects a Python script path here,
+            # not ["python", "app.py"]. bootstrap.py enables ADOT before app.py loads.
+            "entryPoint": ["bootstrap.py"],
         }
     }
 
@@ -232,9 +227,13 @@ def _wait_for_ready(
         if status == "READY":
             print(" ✅")
             return
-        if status in ("FAILED", "DELETING"):
+        if status.endswith("_FAILED") or status in ("FAILED", "DELETING"):
             print(f" ❌")
-            raise RuntimeError(f"Agent runtime entered unexpected status: {status}")
+            reason = response.get("failureReason")
+            detail = f": {reason}" if reason else ""
+            raise RuntimeError(
+                f"Agent runtime entered unexpected status: {status}{detail}"
+            )
         print(".", end="", flush=True)
         time.sleep(10)
         elapsed += 10
@@ -310,8 +309,6 @@ def main() -> None:
             f"  Note: AGENT_NAME sanitized from '{agent_name_raw}' to '{agent_name}' (hyphens → underscores)"
         )
 
-    role_name = f"AmazonBedrockAgentCoreRuntime_{agent_name}"
-
     print(f"\n🚀 Deploying agent '{agent_name}' to AgentCore in {aws_region}...\n")
 
     # Get AWS account ID — needed for constructing ARNs and the S3 bucket name
@@ -324,7 +321,7 @@ def main() -> None:
     s3_bucket = f"bedrock-agentcore-code-{account_id}-{aws_region}"
     s3_key = f"{agent_name}/deployment.zip"
     s3 = boto3.client("s3", region_name=aws_region)
-    iam = boto3.client("iam")
+    cloudformation = boto3.client("cloudformation", region_name=aws_region)
     agentcore_ctrl = boto3.client("bedrock-agentcore-control", region_name=aws_region)
 
     # ── Step 1: Ensure S3 bucket exists ──────────────────────────────────────
@@ -344,21 +341,26 @@ def main() -> None:
     except ClientError as e:
         _handle_client_error(e, "S3 upload")
 
-    # ── Step 3: Create/update IAM execution role ──────────────────────────────
+    # ── Step 3: Resolve IAM execution role (CDK-managed) ─────────────────────
     print("\nStep 3/5: Ensuring IAM execution role...")
     try:
-        role_arn = _ensure_iam_role(
-            iam, role_name, aws_region, account_id, model_id, agent_name
-        )
+        role_arn = _get_runtime_role_arn(cloudformation, _RUNTIME_ROLE_STACK_NAME)
     except ClientError as e:
-        _handle_client_error(e, "IAM role creation")
+        _handle_client_error(e, "IAM role lookup")
 
     # ── Step 4: Create or update AgentCore runtime (idempotent) ──────────────
     print("\nStep 4/5: Deploying AgentCore runtime (idempotent)...")
     artifact = _build_artifact(s3_bucket, s3_key)
     env_vars = {
+        "AGENT_NAME": agent_name,
+        "AGENT_OBSERVABILITY_ENABLED": "true",
+        "AWS_AGENTIC_OBSERVABILITY_OPT_IN": "true",
         "MODEL_PROVIDER": model_provider,
         "MODEL_ID": model_id,
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": f"https://xray.{aws_region}.amazonaws.com/v1/traces",
+        "OTEL_RESOURCE_ATTRIBUTES": f"service.name={agent_name}",
+        "OTEL_TRACES_EXPORTER": "otlp",
         "AWS_REGION": aws_region,
     }
     # GOOGLE_API_KEY passthrough is preserved for completeness, but the provider check

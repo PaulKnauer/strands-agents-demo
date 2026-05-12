@@ -14,7 +14,8 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 | Model provider switching via env vars (Bedrock ↔ Gemini, no code change) | `agent.py`, `.env.example` |
 | Conversational REPL loop with Strands `Agent()` | `agent.py` |
 | One-command AgentCore deployment with IAM provisioning | `deploy/deploy.py` |
-| Automatic tool-call observability — zero custom logging code | AgentCore console |
+| AgentCore observability via ADOT bootstrap + Transaction Search | `deploy/bootstrap.py`, CloudWatch |
+| Transaction Search enablement via CDK | `infra/transaction_search_stack.py` |
 | Single-file agent that can be forked by changing one file | `agent.py` |
 
 **NIST AI RMF responsible-AI patterns:**
@@ -48,7 +49,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 
 - Python 3.11+ ([download](https://www.python.org/downloads/))
 - AWS account with Amazon Bedrock enabled
-- Bedrock model access granted for **`anthropic.claude-3-haiku-20240307-v1:0`** in `us-east-1`
+- Bedrock model access granted for **`us.amazon.nova-micro-v1:0`** in `us-east-1`
   _(Console → Amazon Bedrock → Model access → Request access)_
 - AWS credentials configured locally via the AWS CLI, IAM Identity Center, or another standard AWS SDK credential provider.
 
@@ -99,7 +100,7 @@ Edit `.env` and fill in your values:
 
 ```bash
 MODEL_PROVIDER=bedrock
-MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+MODEL_ID=us.amazon.nova-micro-v1:0
 AWS_REGION=us-east-1
 AGENT_NAME=age-in-days-demo
 ```
@@ -136,11 +137,23 @@ To verify: set a breakpoint inside `get_today_date()`, press F5, type a date of 
 
 ## AgentCore Deployment
 
-AgentCore runs the agent as a managed cloud runtime with automatic tool-call tracing. The deployment script provisions all AWS infrastructure — no console steps required.
+AgentCore runs the agent as a managed cloud runtime with automatic tool-call tracing. The runtime IAM role and Transaction Search are CDK-managed; `deploy.py` packages code, uploads the artifact, and creates or updates the runtime.
 
 **Step 1:** Confirm local agent works first (complete [Local Setup](#local-setup)).
 
-**Step 2:** Deploy:
+**Step 2:** Provision the CDK-managed runtime role:
+
+```bash
+make create-role
+```
+
+If this is the first run after migrating from the older direct-IAM flow and
+`make create-role` fails with `AWS::IAM::Role ... already exists`, the legacy
+unmanaged runtime role is still present in the account with the same fixed name.
+Remove that legacy role once, then rerun `make create-role` so CloudFormation/CDK
+becomes the sole owner of `AmazonBedrockAgentCoreRuntime_<agent>`.
+
+**Step 3:** Deploy:
 
 ```bash
 python deploy/deploy.py
@@ -157,7 +170,7 @@ Step 1/5: Ensuring S3 bucket...
 Step 2/5: Packaging and uploading agent code...
   Uploaded 4,231,847 bytes → s3://...
 Step 3/5: Ensuring IAM execution role...
-  Created IAM role: AmazonBedrockAgentCoreRuntime_age_in_days_demo
+  IAM role exists (CDK-managed): AmazonBedrockAgentCoreRuntime_age_in_days_demo
 Step 4/5: Deploying AgentCore runtime (idempotent)...
   Creating new AgentCore runtime 'age_in_days_demo'...
 Step 5/5: Waiting for runtime to be ready...
@@ -167,35 +180,73 @@ Step 5/5: Waiting for runtime to be ready...
    Endpoint URL: https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/.../invocations
 ```
 
-**Step 3:** Verify the deployed agent responds:
+**Step 4:** Verify the deployed agent responds:
 
 ```bash
 python deploy/verify.py
 # or: make verify
 ```
 
-Expected output:
+Expected output (the age in days will reflect today's date when you run it):
 
 ```
 Verifying deployed agent 'age_in_days_demo' in us-east-1...
+  Expected age: <computed> days  (DOB: 1990-03-14 → today, UTC)
+
+  Runtime: age_in_days_demo
   Runtime ARN: arn:aws:bedrock-agentcore:...
   Test prompt: "I was born on 14th March 1990"
 
 Agent responded (in 3.2s):
 
-You were born 13,149 days ago! ...
+You were born <computed> days ago! ...
+
+  Expected: <computed> days  |  Elapsed: 3.2s (within 5s budget)  |  Result: PASS
 
 Verification complete.
 Next: open the AgentCore console to confirm get_today_date tool traces are visible.
+  https://console.aws.amazon.com/bedrock-agentcore/
 ```
 
-**Step 4:** View tool traces in the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/) → your agent → Invocation history. Every `get_today_date` call is traced with its input and output — no logging code written.
+The verifier checks that the response contains the correct UTC-based age in days (not just any number) and that the response arrives within the 5-second performance budget. To override the budget: `VERIFY_PERF_BUDGET_SECONDS=10 python deploy/verify.py`. To extend the transport timeout for slow networks: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
+
+**Step 5:** Enable CloudWatch Transaction Search once per account/region:
+
+```bash
+make transaction-search
+```
+
+This deploys an idempotent CDK stack that creates the required CloudWatch Logs resource policy and `AWS::XRay::TransactionSearchConfig` for Transaction Search. Re-running `make transaction-search` updates the same stack in place. The stack defaults to `100%` indexing so low-volume demo traffic is actually searchable in CloudWatch `Sessions` and `Traces`. AWS documents this as the supported CloudFormation/CDK path. If Transaction Search was previously enabled manually in this region, disable it before the first CDK deploy of this stack.
+
+To remove the IaC-managed Transaction Search configuration later:
+
+```bash
+make teardown-transaction-search
+```
+
+**Step 6:** Confirm AgentCore observability:
+
+1. Open the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/) and navigate to your agent → **Invocation history**.
+2. Select the invocation that corresponds to your `make verify` run.
+3. Confirm the trace includes:
+   - A `get_today_date` **tool invocation** with its input and output (today's UTC date in ISO format).
+   - The **final text response** containing the age in days.
+4. If traces are not visible immediately after enablement, wait a few minutes, re-run `make verify`, and check CloudWatch again. AWS notes it can take about ten minutes for spans to become searchable after Transaction Search is enabled.
+5. `deploy/bootstrap.py` starts the runtime under AWS Distro for OpenTelemetry (ADOT), and `make verify` now sends an explicit `runtimeSessionId` so CloudWatch can group the invocation predictably under `Sessions`.
+
+> **Note:** Transaction Search alone is not enough for AgentCore-hosted agent traces. The deployed runtime must start with ADOT instrumentation enabled. This repo does that through `deploy/bootstrap.py` and the bundled `aws-opentelemetry-distro` dependency.
 
 **Teardown** (when done):
 
 ```bash
 python deploy/teardown.py
 # or: make teardown
+```
+
+To remove the CDK-managed runtime role as well:
+
+```bash
+make teardown-role
 ```
 
 ---
@@ -212,6 +263,7 @@ Epic 4 of this project implements a complete [NIST AI Risk Management Framework 
 | **MAP** | 1.1, 2.2 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — data flows and harm analysis | — |
 | **MEASURE** | 2.4 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — guardrail block rate monitoring | `make dashboard` |
 | **MEASURE** | 2.5 | [`compliance/hooks.py`](compliance/hooks.py) + [`deploy/create_dashboard.py`](deploy/create_dashboard.py) — tool invocation audit trail | `make dashboard` |
+| **MEASURE** | 2.5 | [`infra/transaction_search_stack.py`](infra/transaction_search_stack.py) — CloudWatch Transaction Search enablement for AgentCore spans | `make transaction-search` |
 | **MEASURE** | 2.7 | [`infra/github_actions_stack.py`](infra/github_actions_stack.py) + [`.github/workflows/redteam.yml`](.github/workflows/redteam.yml) — short-lived GitHub OIDC credentials for red-team CI | `make redteam-role` |
 | **MANAGE** | 1.3, 2.2 | [`deploy/guardrail.yaml`](deploy/guardrail.yaml) — Bedrock Guardrails (PII redaction, prompt-injection defence, content filtering) | `make deploy` |
 | **MANAGE** | 2.4 | [`docs/risk-register.md`](docs/risk-register.md) + CloudWatch dashboard — incident tracking and audit trail | `make dashboard` |
@@ -224,7 +276,7 @@ Epic 4 of this project implements a complete [NIST AI Risk Management Framework 
 - `compliance/hooks.py` — `AuditLoggingHook` attaches to the Strands lifecycle and emits a JSONL audit record on every tool call
 - `deploy/guardrail.yaml` — Bedrock Guardrails policy applied to both the local REPL (`agent.py`) and the AgentCore cloud runtime (`deploy/app.py`)
 - `deploy/create_dashboard.py` — deploys the `NIST-RMF-AgentCompliance` CloudWatch dashboard; run `make dashboard` after deploying the agent
-- `infra/` — AWS CDK stack for GitHub Actions OIDC and least-privilege Bedrock red-team permissions
+- `infra/` — AWS CDK stacks for the AgentCore runtime role, GitHub Actions OIDC, and CloudWatch Transaction Search
 
 ---
 
@@ -242,9 +294,9 @@ strands-agents-demo/
 │
 ├── deploy/
 │   ├── app.py            # Cloud runtime entrypoint (boto3 direct, no Strands SDK)
-│   ├── deploy.py         # Provisions S3, IAM role, AgentCore runtime (idempotent)
+│   ├── deploy.py         # Provisions S3 and AgentCore runtime (idempotent); expects CDK-managed role
 │   ├── verify.py         # Post-deploy smoke test — invokes the live endpoint
-│   ├── teardown.py       # Deletes AgentCore runtime, IAM role, and CloudWatch dashboard
+│   ├── teardown.py       # Deletes AgentCore runtime, S3 object, and CloudWatch dashboard
 │   ├── guardrail.yaml    # Bedrock Guardrails policy — PII redaction, prompt-injection defence
 │   ├── create_dashboard.py  # CloudWatch NIST-RMF-AgentCompliance dashboard (idempotent)
 │   └── start.sh          # (unused locally) dependency install + launch for runtime
@@ -311,7 +363,7 @@ LLM responds: "You were born 13,149 days ago! 🎂"
 Response printed to terminal
 ```
 
-In AgentCore (cloud), the same flow runs inside `deploy/app.py` via the Bedrock Converse API. Every step where the LLM calls `get_today_date` is automatically captured in the AgentCore console — input, output, and latency — with zero custom logging code.
+In AgentCore (cloud), the same flow runs inside `deploy/app.py` via the Bedrock Converse API. `deploy/bootstrap.py` starts the runtime under ADOT so CloudWatch can capture the `get_today_date` span, its output, and the final response text without adding ad hoc log statements.
 
 ### Model provider switching (local only)
 
@@ -320,7 +372,7 @@ Change two env vars in `.env` — no code modification required:
 ```bash
 # Amazon Bedrock (default)
 MODEL_PROVIDER=bedrock
-MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+MODEL_ID=us.amazon.nova-micro-v1:0
 
 # Google Gemini (free tier fallback)
 MODEL_PROVIDER=gemini
@@ -339,10 +391,14 @@ GOOGLE_API_KEY=your-key-here
 make install        # Create venv and install dependencies
 make run            # Run the agent locally (python agent.py)
 make redteam-role   # Deploy GitHub Actions OIDC role for scheduled red-team CI
+make create-role    # Deploy the AgentCore runtime IAM role via CDK
+make transaction-search  # Enable CloudWatch Transaction Search for AgentCore traces
 make deploy         # Deploy to AgentCore (python deploy/deploy.py)
 make verify         # Verify deployed agent (python deploy/verify.py)
-make teardown       # Delete AgentCore runtime, IAM role, and CloudWatch dashboard
+make teardown       # Delete AgentCore runtime, S3 deployment object, and CloudWatch dashboard
+make teardown-role  # Destroy the AgentCore runtime IAM role stack
 make teardown-redteam-role  # Destroy the GitHub Actions OIDC role stack
+make teardown-transaction-search  # Destroy the Transaction Search CDK stack
 make dashboard      # Create/update CloudWatch NIST-RMF compliance dashboard
 make redteam        # Run promptfoo adversarial red-team scan
 make test           # Run unit + eval tests (134 tests)
@@ -380,7 +436,9 @@ AgentCore is available in select regions. Confirm `AWS_REGION=us-east-1` in `.en
 
 **Model access error from Bedrock**
 
-`anthropic.claude-3-haiku-20240307-v1:0` must be enabled in your account. Go to AWS Console → Amazon Bedrock → Model access → find Claude 3 Haiku → Request access.
+`us.amazon.nova-micro-v1:0` must be enabled in your account. Go to AWS Console → Amazon Bedrock → Model access → find Amazon Nova Micro → Request access.
+
+If you see `This Model is marked by provider as Legacy`, your `.env` still points at an older Anthropic Claude model. Update `MODEL_ID` to the Amazon Nova Micro inference profile above, then re-run `make deploy` so AgentCore receives the new environment variable and IAM policy.
 
 **`venv/bin/python: No such file or directory`**
 
@@ -388,11 +446,27 @@ You haven't created the virtual environment yet. Run `python -m venv venv && sou
 
 **`make verify` fails — agent deployed but no response**
 
-Check the runtime status in the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/). If status is not `READY`, re-run `make deploy`. If it shows `FAILED`, check the CloudWatch logs linked from the console.
+Check the runtime status in the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/). If status is not `READY`, re-run `make deploy`.
+
+If the runtime shows `CREATE_FAILED` or `UPDATE_FAILED`, inspect the runtime details first. These failures can happen before the app starts, so CloudWatch logs may not exist yet. A failure reason like `binary files that are incompatible with Linux ARM64` means the deployment package contains the wrong wheel architecture; rebuild with the AgentCore ARM64 packaging path in `deploy/deploy.py`, then deploy again.
+
+Only check CloudWatch logs after the runtime has started or AgentCore links logs from the runtime details page.
+
+**`make verify` fails — wrong age or `FAIL — response does not contain the expected age-in-days value`**
+
+The verifier computes the expected age in days from DOB `1990-03-14` to today's UTC date at run time and checks that the response contains that exact value. Common causes:
+
+- `MODEL_PROVIDER` is not set to `bedrock` in `.env`. The AgentCore deployed runtime only supports `MODEL_PROVIDER=bedrock`; other values return an error response.
+- `MODEL_ID` is incorrect or Bedrock model access has not been granted. See the **Model access error** entry below.
+- The runtime is deployed in a different region than `AWS_REGION` in `.env` — the invocation reaches the wrong endpoint.
+
+**`make verify` fails — `FAIL — elapsed time … exceeded … performance budget`**
+
+The default performance budget is 5 seconds. To override: `VERIFY_PERF_BUDGET_SECONDS=15 python deploy/verify.py`. To extend the transport (hang) timeout: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
 
 **Deployment succeeds but verify times out**
 
-The default verify timeout is 30 seconds. Set `VERIFY_TIMEOUT_SECONDS=60` in `.env` and retry.
+The default transport timeout is 30 seconds. Set `VERIFY_TIMEOUT_SECONDS=60` in `.env` and retry. If the runtime is still starting up, wait a minute and re-run `make verify`.
 
 ---
 

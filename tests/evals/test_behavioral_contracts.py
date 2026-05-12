@@ -59,11 +59,13 @@ class TestToolUseContract:
             ]
         )
 
-        result = _run_agent("I was born on 14 March 1990")
+        with patch("deploy.app._get_today_date", return_value="2026-05-10"):
+            result = _run_agent("I was born on 14 March 1990")
 
-        # Two converse calls = tool was invoked
-        assert mock_client.return_value.converse.call_count == 2
-        assert re.search(r"\d+", result), "Response must contain a numeric age-in-days"
+        # One converse call with stopReason=tool_use proves the model requested get_today_date.
+        # The runtime then computes age deterministically instead of asking the model to do math.
+        assert mock_client.return_value.converse.call_count == 1
+        assert "13,206" in result
 
 
 class TestResponseQualityContract:
@@ -123,7 +125,8 @@ class TestDDMMYYYYContract:
                 _end_turn("You are 13149 days old."),
             ]
         )
-        result = _run_agent("I was born on 14/03/1990")
-        # Tool was called — agent did not ask for clarification
-        assert mock_client.return_value.converse.call_count == 2
-        assert re.search(r"\d+", result)
+        with patch("deploy.app._get_today_date", return_value="2026-05-10"):
+            result = _run_agent("I was born on 14/03/1990")
+        # Tool was called — agent did not ask for clarification.
+        assert mock_client.return_value.converse.call_count == 1
+        assert "13,206" in result

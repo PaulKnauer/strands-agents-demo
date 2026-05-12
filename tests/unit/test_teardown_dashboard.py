@@ -1,6 +1,8 @@
 """Tests for the CloudWatch dashboard deletion step in teardown.py."""
 
 import os
+import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
@@ -30,14 +32,12 @@ class TestTeardownDashboard:
         mock_agentcore = MagicMock()
         mock_agentcore.list_agent_runtimes.return_value = {"agentRuntimes": []}
 
-        mock_iam = MagicMock()
         mock_s3 = MagicMock()
 
         def client_factory(service, **kwargs):
             return {
                 "sts": mock_sts,
                 "bedrock-agentcore-control": mock_agentcore,
-                "iam": mock_iam,
                 "s3": mock_s3,
                 "cloudwatch": mock_cw,
             }[service]
@@ -62,7 +62,7 @@ class TestTeardownDashboard:
         )
         captured = capsys.readouterr()
         assert "not found" in captured.out
-        assert "⚠️" not in captured.out.split("Step 4")[1]
+        assert "⚠️" not in captured.out.split("Step 3")[1]
 
     def test_dashboard_other_client_error_prints_warning(self, capsys):
         mock_cw = self._run_main_with_mocks(
@@ -70,3 +70,27 @@ class TestTeardownDashboard:
         )
         captured = capsys.readouterr()
         assert "⚠️" in captured.out
+
+    def test_direct_script_execution_imports_without_package_error(self):
+        script_path = os.path.join(os.getcwd(), "deploy", "teardown.py")
+        deploy_dir = os.path.dirname(script_path)
+        import_smoke = (
+            "import runpy, sys; "
+            f"sys.path.insert(0, {deploy_dir!r}); "
+            f"runpy.run_path({script_path!r}, run_name='not_main')"
+        )
+
+        result = subprocess.run(
+            [sys.executable, "-c", import_smoke],
+            cwd=os.getcwd(),
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "PYTHON_DOTENV_DISABLED": "1",
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert "ModuleNotFoundError" not in result.stderr

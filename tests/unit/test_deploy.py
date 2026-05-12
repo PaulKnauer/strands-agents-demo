@@ -6,15 +6,19 @@ AC #3 (Story 2.1): idempotency — update, not duplicate, on re-deploy.
 """
 
 import json
+import io
 import os
 import sys
+import zipfile
 import pytest
 from unittest.mock import MagicMock, patch, call
 from botocore.exceptions import ClientError
 
 from deploy.deploy import (
+    _bedrock_model_resources,
     _build_artifact,
-    _ensure_iam_role,
+    _build_deployment_zip,
+    _get_runtime_role_arn,
     _find_existing_runtime,
     _handle_client_error,
     _wait_for_ready,
@@ -31,7 +35,7 @@ def _client_error(code: str, message: str = "error") -> ClientError:
 ENV = {
     "AWS_REGION": "us-east-1",
     "AGENT_NAME": "test-agent",
-    "MODEL_ID": "anthropic.claude-3-haiku-20240307-v1:0",
+    "MODEL_ID": "us.amazon.nova-micro-v1:0",
     "MODEL_PROVIDER": "bedrock",
 }
 
@@ -168,6 +172,17 @@ class TestWaitForReady:
         ctrl.get_agent_runtime.return_value = {"status": "FAILED"}
         with pytest.raises(RuntimeError, match="unexpected status"):
             _wait_for_ready(ctrl, "runtime-id-1", timeout_seconds=60)
+
+    @patch("deploy.deploy.time.sleep")
+    def test_create_failed_status_includes_failure_reason(self, mock_sleep):
+        ctrl = MagicMock()
+        ctrl.get_agent_runtime.return_value = {
+            "status": "CREATE_FAILED",
+            "failureReason": "binary files are incompatible with Linux ARM64",
+        }
+        with pytest.raises(RuntimeError, match="Linux ARM64"):
+            _wait_for_ready(ctrl, "runtime-id-1", timeout_seconds=60)
+        mock_sleep.assert_not_called()
 
     @patch("deploy.deploy.time.sleep")
     def test_timeout_raises_timeout_error(self, mock_sleep):
@@ -313,14 +328,14 @@ class TestMainEnvValidation:
 
 
 class TestMainIdempotency:
-    def _make_boto3_factory(self, sts, s3, iam, ctrl):
+    def _make_boto3_factory(self, sts, s3, cloudformation, ctrl):
         def factory(service_name, **kwargs):
             if service_name == "sts":
                 return sts
             if service_name == "s3":
                 return s3
-            if service_name == "iam":
-                return iam
+            if service_name == "cloudformation":
+                return cloudformation
             if service_name == "bedrock-agentcore-control":
                 return ctrl
             return MagicMock()
@@ -334,20 +349,30 @@ class TestMainIdempotency:
         s3 = MagicMock()
         s3.head_bucket.return_value = {}  # bucket exists
 
-        iam = MagicMock()
-        iam.get_role.return_value = {
-            "Role": {"Arn": "arn:aws:iam::123456789012:role/test-role"}
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "Outputs": [
+                        {
+                            "OutputKey": "AgentCoreRuntimeRoleArn",
+                            "OutputValue": "arn:aws:iam::123456789012:role/test-role",
+                        },
+                        {
+                            "OutputKey": "AgentCoreRuntimeRoleName",
+                            "OutputValue": "generated-role-name",
+                        },
+                    ]
+                }
+            ]
         }
-        iam.exceptions.NoSuchEntityException = type(
-            "NoSuchEntityException", (Exception,), {}
-        )
 
-        return sts, s3, iam
+        return sts, s3, cloudformation
 
     @patch("deploy.deploy.load_dotenv")
     @patch("deploy.deploy._build_deployment_zip", return_value=b"zipbytes")
     def test_new_runtime_calls_create(self, mock_zip, mock_dotenv):
-        sts, s3, iam = self._base_mocks()
+        sts, s3, cloudformation = self._base_mocks()
         ctrl = MagicMock()
         ctrl.list_agent_runtimes.return_value = {"agentRuntimes": []}
         ctrl.create_agent_runtime.return_value = {
@@ -360,7 +385,7 @@ class TestMainIdempotency:
             patch.dict(os.environ, ENV, clear=True),
             patch(
                 "deploy.deploy.boto3.client",
-                side_effect=self._make_boto3_factory(sts, s3, iam, ctrl),
+                side_effect=self._make_boto3_factory(sts, s3, cloudformation, ctrl),
             ),
             patch("deploy.deploy.time.sleep"),
         ):
@@ -370,11 +395,20 @@ class TestMainIdempotency:
 
         ctrl.create_agent_runtime.assert_called_once()
         ctrl.update_agent_runtime.assert_not_called()
+        env_vars = ctrl.create_agent_runtime.call_args.kwargs["environmentVariables"]
+        assert env_vars["AGENT_OBSERVABILITY_ENABLED"] == "true"
+        assert env_vars["AWS_AGENTIC_OBSERVABILITY_OPT_IN"] == "true"
+        assert env_vars["OTEL_TRACES_EXPORTER"] == "otlp"
+        assert (
+            env_vars["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]
+            == "https://xray.us-east-1.amazonaws.com/v1/traces"
+        )
+        assert env_vars["OTEL_RESOURCE_ATTRIBUTES"] == "service.name=test_agent"
 
     @patch("deploy.deploy.load_dotenv")
     @patch("deploy.deploy._build_deployment_zip", return_value=b"zipbytes")
     def test_existing_runtime_calls_update(self, mock_zip, mock_dotenv):
-        sts, s3, iam = self._base_mocks()
+        sts, s3, cloudformation = self._base_mocks()
         ctrl = MagicMock()
         ctrl.list_agent_runtimes.return_value = {
             "agentRuntimes": [
@@ -391,7 +425,7 @@ class TestMainIdempotency:
             patch.dict(os.environ, ENV, clear=True),
             patch(
                 "deploy.deploy.boto3.client",
-                side_effect=self._make_boto3_factory(sts, s3, iam, ctrl),
+                side_effect=self._make_boto3_factory(sts, s3, cloudformation, ctrl),
             ),
             patch("deploy.deploy.time.sleep"),
         ):
@@ -401,6 +435,15 @@ class TestMainIdempotency:
 
         ctrl.update_agent_runtime.assert_called_once()
         ctrl.create_agent_runtime.assert_not_called()
+        env_vars = ctrl.update_agent_runtime.call_args.kwargs["environmentVariables"]
+        assert env_vars["AGENT_OBSERVABILITY_ENABLED"] == "true"
+        assert env_vars["AWS_AGENTIC_OBSERVABILITY_OPT_IN"] == "true"
+        assert env_vars["OTEL_TRACES_EXPORTER"] == "otlp"
+        assert (
+            env_vars["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]
+            == "https://xray.us-east-1.amazonaws.com/v1/traces"
+        )
+        assert env_vars["OTEL_RESOURCE_ATTRIBUTES"] == "service.name=test_agent"
 
 
 # ── _build_artifact ───────────────────────────────────────────────────────────
@@ -411,10 +454,10 @@ class TestBuildArtifact:
         artifact = _build_artifact("my-bucket", "my-key/deployment.zip")
         assert artifact["codeConfiguration"]["runtime"] == "PYTHON_3_12"
 
-    def test_entry_point_is_single_element_app_py(self):
-        """Entry point must be ["app.py"], not ["python", "app.py"] — AgentCore validation."""
+    def test_entry_point_is_single_element_bootstrap_py(self):
+        """Entry point must stay a single Python file for AgentCore validation."""
         artifact = _build_artifact("my-bucket", "my-key/deployment.zip")
-        assert artifact["codeConfiguration"]["entryPoint"] == ["app.py"]
+        assert artifact["codeConfiguration"]["entryPoint"] == ["bootstrap.py"]
 
     def test_uses_s3_source_with_correct_bucket_and_key(self):
         artifact = _build_artifact("test-bucket", "agent/deployment.zip")
@@ -423,79 +466,117 @@ class TestBuildArtifact:
         assert s3["prefix"] == "agent/deployment.zip"
 
 
+# ── _build_deployment_zip ────────────────────────────────────────────────────
+
+
+class TestBuildDeploymentZip:
+    @patch("deploy.deploy.subprocess.run")
+    def test_dependency_install_targets_agentcore_arm64(self, mock_run, tmp_path):
+        project_root = tmp_path
+        deploy_dir = project_root / "deploy"
+        deploy_dir.mkdir()
+        (deploy_dir / "app.py").write_text("app = object()\n")
+        (deploy_dir / "bootstrap.py").write_text("import app\n")
+
+        zip_bytes = _build_deployment_zip(str(project_root))
+
+        assert zip_bytes
+        cmd = mock_run.call_args.args[0]
+        platform_index = cmd.index("--platform") + 1
+        python_version_index = cmd.index("--python-version") + 1
+        binary_index = cmd.index("--only-binary") + 1
+        assert cmd[platform_index] == "manylinux2014_aarch64"
+        assert cmd[python_version_index] == "312"
+        assert cmd[binary_index] == ":all:"
+        assert "aws-opentelemetry-distro>=0.10.0" in cmd
+
+    @patch("deploy.deploy.subprocess.run")
+    def test_bundle_contains_bootstrap_and_app(self, mock_run, tmp_path):
+        project_root = tmp_path
+        deploy_dir = project_root / "deploy"
+        deploy_dir.mkdir()
+        (deploy_dir / "app.py").write_text("app = object()\n")
+        (deploy_dir / "bootstrap.py").write_text("import app\n")
+
+        zip_bytes = _build_deployment_zip(str(project_root))
+
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            names = set(zf.namelist())
+        assert "app.py" in names
+        assert "bootstrap.py" in names
+
+
 # ── _ensure_iam_role ──────────────────────────────────────────────────────────
 
 
-class TestEnsureIamRole:
-    def _make_iam(self, existing_arn=None):
-        iam = MagicMock()
-        NoSuchEntityException = type("NoSuchEntityException", (Exception,), {})
-        iam.exceptions.NoSuchEntityException = NoSuchEntityException
-        if existing_arn:
-            iam.get_role.return_value = {"Role": {"Arn": existing_arn}}
-        else:
-            iam.get_role.side_effect = NoSuchEntityException()
-            iam.create_role.return_value = {
-                "Role": {"Arn": "arn:aws:iam::123456789012:role/new"}
-            }
-        return iam
-
-    def test_model_arn_is_specific_not_wildcard(self):
-        """bedrock:InvokeModel Resource must be scoped to the model ARN, never '*'."""
-        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
-        _ensure_iam_role(
-            iam,
-            "r",
+class TestGetRuntimeRoleArn:
+    def test_inference_profile_resources_include_profile_and_routed_models(self):
+        resources = _bedrock_model_resources(
             "us-east-1",
             "123456789012",
-            "anthropic.claude-3-haiku-20240307-v1:0",
-            "test_agent",
-        )
-        policy = json.loads(iam.put_role_policy.call_args[1]["PolicyDocument"])
-        invoke_stmt = next(
-            s for s in policy["Statement"] if s["Action"] == "bedrock:InvokeModel"
-        )
-        assert invoke_stmt["Resource"] == (
-            "arn:aws:bedrock:us-east-1::foundation-model/"
-            "anthropic.claude-3-haiku-20240307-v1:0"
+            "us.amazon.nova-micro-v1:0",
         )
 
-    def test_agentcore_resource_is_scoped_not_wildcard(self):
-        """bedrock-agentcore:* Resource must be scoped to the runtime prefix, never '*'."""
-        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
-        _ensure_iam_role(
-            iam, "r", "us-east-1", "123456789012", "some-model", "test_agent"
-        )
-        policy = json.loads(iam.put_role_policy.call_args[1]["PolicyDocument"])
-        agentcore_stmt = next(
-            s for s in policy["Statement"] if s["Action"] == "bedrock-agentcore:*"
-        )
         assert (
-            agentcore_stmt["Resource"]
-            == "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/test_agent*"
+            "arn:aws:bedrock:us-east-1:123456789012:inference-profile/"
+            "us.amazon.nova-micro-v1:0"
+        ) in resources
+        assert (
+            "arn:aws:bedrock:us-east-1::foundation-model/" "amazon.nova-micro-v1:0"
+        ) in resources
+        assert (
+            "arn:aws:bedrock:us-east-2::foundation-model/" "amazon.nova-micro-v1:0"
+        ) in resources
+        assert (
+            "arn:aws:bedrock:us-west-2::foundation-model/" "amazon.nova-micro-v1:0"
+        ) in resources
+
+    def test_stack_output_role_arn_returned(self):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "Outputs": [
+                        {
+                            "OutputKey": "AgentCoreRuntimeRoleArn",
+                            "OutputValue": "arn:aws:iam::123456789012:role/generated",
+                        },
+                        {
+                            "OutputKey": "AgentCoreRuntimeRoleName",
+                            "OutputValue": "generated-role-name",
+                        },
+                    ]
+                }
+            ]
+        }
+        assert (
+            _get_runtime_role_arn(
+                cloudformation, "StrandsDemoAgentCoreRuntimeRoleStack"
+            )
+            == "arn:aws:iam::123456789012:role/generated"
         )
 
-    def test_existing_role_reused_not_duplicated(self):
-        """get_role succeeds → create_role must NOT be called (idempotency)."""
-        iam = self._make_iam("arn:aws:iam::123456789012:role/existing")
-        _ensure_iam_role(iam, "existing", "us-east-1", "123456789012", "model", "agent")
-        iam.create_role.assert_not_called()
-        iam.put_role_policy.assert_called_once()
+    def test_missing_stack_exits_with_cdk_hint(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.side_effect = _client_error("ValidationError")
+        with pytest.raises(SystemExit) as exc:
+            _get_runtime_role_arn(
+                cloudformation, "StrandsDemoAgentCoreRuntimeRoleStack"
+            )
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "make create-role" in out
+        assert "CDK" in out
 
-    def test_new_role_created_when_missing(self):
-        """get_role raises NoSuchEntityException → create_role must be called."""
-        iam = self._make_iam()
-        arn = _ensure_iam_role(
-            iam, "new-role", "us-east-1", "123456789012", "model", "agent"
-        )
-        iam.create_role.assert_called_once()
-        assert arn == "arn:aws:iam::123456789012:role/new"
-
-    def test_inline_policy_always_updated(self):
-        """put_role_policy is called on every deploy, for both new and existing roles."""
-        iam = self._make_iam("arn:aws:iam::123456789012:role/r")
-        _ensure_iam_role(iam, "r", "us-east-1", "123456789012", "model", "agent")
-        iam.put_role_policy.assert_called_once()
+    def test_missing_output_exits_with_cdk_hint(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {"Stacks": [{"Outputs": []}]}
+        with pytest.raises(SystemExit) as exc:
+            _get_runtime_role_arn(
+                cloudformation, "StrandsDemoAgentCoreRuntimeRoleStack"
+            )
+        assert exc.value.code == 1
+        assert "AgentCoreRuntimeRoleArn" in capsys.readouterr().out
 
 
 # ── main() — endpoint output ──────────────────────────────────────────────────
@@ -504,14 +585,14 @@ class TestEnsureIamRole:
 class TestEndpointOutput:
     """Verify main() prints required deployment details on successful deployment."""
 
-    def _make_boto3_factory(self, sts, s3, iam, ctrl):
+    def _make_boto3_factory(self, sts, s3, cloudformation, ctrl):
         def factory(service_name, **kwargs):
             if service_name == "sts":
                 return sts
             if service_name == "s3":
                 return s3
-            if service_name == "iam":
-                return iam
+            if service_name == "cloudformation":
+                return cloudformation
             if service_name == "bedrock-agentcore-control":
                 return ctrl
             return MagicMock()
@@ -525,13 +606,19 @@ class TestEndpointOutput:
         sts.get_caller_identity.return_value = {"Account": "123456789012"}
         s3 = MagicMock()
         s3.head_bucket.return_value = {}
-        iam = MagicMock()
-        iam.get_role.return_value = {
-            "Role": {"Arn": "arn:aws:iam::123456789012:role/r"}
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "Outputs": [
+                        {
+                            "OutputKey": "AgentCoreRuntimeRoleArn",
+                            "OutputValue": "arn:aws:iam::123456789012:role/generated",
+                        }
+                    ]
+                }
+            ]
         }
-        iam.exceptions.NoSuchEntityException = type(
-            "NoSuchEntityException", (Exception,), {}
-        )
         ctrl = MagicMock()
         agent_arn = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/rt-abc"
         ctrl.list_agent_runtimes.return_value = {"agentRuntimes": []}
@@ -545,7 +632,9 @@ class TestEndpointOutput:
             patch.dict(os.environ, ENV, clear=True),
             patch(
                 "deploy.deploy.boto3.client",
-                side_effect=self._make_boto3_factory(sts, s3, iam, ctrl),
+                side_effect=self._make_boto3_factory(
+                    sts, s3, cloudformation, ctrl
+                ),
             ),
             patch("deploy.deploy.time.sleep"),
         ):

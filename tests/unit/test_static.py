@@ -122,9 +122,7 @@ class TestEnvExample:
     def test_model_id_comment_mentions_bedrock_and_gemini(self):
         """AC #3 (Story 1.1): MODEL_ID comment must cover both local model paths."""
         content = self._content()
-        assert (
-            '# Model ID — Bedrock: "anthropic.claude-3-haiku-20240307-v1:0"' in content
-        )
+        assert '# Model ID — Bedrock: "us.amazon.nova-micro-v1:0"' in content
         assert '#           — Gemini: "gemini-2.0-flash"' in content
 
     def test_agent_name_comment_mentions_idempotency(self):

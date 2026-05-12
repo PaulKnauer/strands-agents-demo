@@ -45,42 +45,28 @@ def _tool_use_response(tool_use_id: str) -> dict:
 
 class TestAgentLoopMessageSequence:
     @patch("deploy.app.boto3.client")
-    def test_single_tool_call_message_sequence(self, mock_client):
-        """Verify the exact messages passed across both converse calls."""
+    def test_parseable_dob_tool_call_returns_deterministic_age(self, mock_client):
+        """Parseable DOBs return deterministic age after the model requests today's date."""
         mock_bedrock = MagicMock()
         mock_client.return_value = mock_bedrock
-        mock_bedrock.converse.side_effect = [
-            _tool_use_response("tu-001"),
-            _end_turn("You are 13149 days old."),
-        ]
+        mock_bedrock.converse.return_value = _tool_use_response("tu-001")
 
-        result = _run_agent("I was born on 14 March 1990")
+        with patch("deploy.app._get_today_date", return_value="2026-05-10"):
+            result = _run_agent("I was born on 14 March 1990")
 
-        assert result == "You are 13149 days old."
-        assert mock_bedrock.converse.call_count == 2
+        assert "13,206 days old" in result
+        assert mock_bedrock.converse.call_count == 1
 
-        # Messages list is mutated in-place; use the last call_args to read final accumulated state.
-        # All call_args entries reference the same list object — call_args_list[-1] is the
-        # canonical final state: [user, assistant(tool_use), user(tool_result), assistant(final)]
+        # Messages list is mutated in-place; the final state includes the user prompt and
+        # assistant toolUse. The runtime returns deterministic age before a second model turn.
         final_messages = mock_bedrock.converse.call_args_list[-1][1]["messages"]
-        assert len(final_messages) == 4
+        assert len(final_messages) == 2
 
         assert final_messages[0]["role"] == "user"
         assert final_messages[0]["content"][0]["text"] == "I was born on 14 March 1990"
 
         assert final_messages[1]["role"] == "assistant"
         assert final_messages[1]["content"][0]["toolUse"]["toolUseId"] == "tu-001"
-
-        tool_result = final_messages[2]["content"][0]["toolResult"]
-        assert tool_result["toolUseId"] == "tu-001"
-        # Tool result must be a valid ISO date returned by _get_today_date()
-        import re
-
-        tool_result_text = tool_result["content"][0]["text"]
-        assert re.match(r"^\d{4}-\d{2}-\d{2}$", tool_result_text)
-
-        assert final_messages[3]["role"] == "assistant"
-        assert final_messages[3]["content"][0]["text"] == "You are 13149 days old."
 
     @patch("deploy.app.boto3.client")
     def test_two_tool_calls_message_sequence(self, mock_client):
