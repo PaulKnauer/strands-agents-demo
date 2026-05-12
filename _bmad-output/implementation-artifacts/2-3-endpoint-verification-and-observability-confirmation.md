@@ -1,6 +1,6 @@
 # Story 2.3: Endpoint Verification and Observability Confirmation
 
-Status: in-progress
+Status: backlog
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -194,6 +194,7 @@ None — implementation was straightforward brownfield hardening with no unexpec
 - README Troubleshooting updated with entries for wrong-age (MODEL_PROVIDER, MODEL_ID, region), perf budget failure, and clearer timeout guidance.
 - Live AWS run: credentials valid (IAM user Paul, account 181107243662). AgentCore runtime `age_in_days_demo-YaNxhM5d01` exists in us-east-1 but is `CREATE_FAILED`. AWS failure reason: artifact contains binary files incompatible with Linux ARM64. No `/aws/bedrock-agentcore` CloudWatch log groups exist, so failure occurred before app startup. Observability confirmation cannot be performed until runtime is re-deployed successfully and `make verify` produces an invocation trace.
 - Manual validation update (2026-05-10): Paul reports `make deploy` was run twice successfully for idempotency and `make teardown` works as specified and is idempotent. Managed observability trace inspection is still not recorded in this story file.
+- 2026-05-12 defer decision: live observability confirmation is being split from infrastructure/prerequisite hardening. Story 2.4 now owns the deterministic CDK and observability-foundation contract; this story returns to backlog until that prerequisite work is complete.
 
 ### File List
 
@@ -218,3 +219,4 @@ None — implementation was straightforward brownfield hardening with no unexpec
 - 2026-05-09: Story 2.3 implementation — strengthened verifier correctness/timing contract, expanded test coverage to 30 tests, updated README observability and troubleshooting docs (claude-sonnet-4-6)
 - 2026-05-10: Code review hardening — fixed AgentCore ARM64 packaging, deploy/verify failure diagnostics, teardown direct-script import, and final verifier edge cases; recorded manual deploy/teardown idempotency validation (gpt-5)
 - 2026-05-10: Verification failure fix — moved default Bedrock model to Amazon Nova Micro inference profile, added inference-profile IAM resources, made deployed runtime model errors actionable, and made age calculation deterministic after `get_today_date` tool use (gpt-5)
+- 2026-05-12: Deferred live observability confirmation back to backlog while Story 2.4 establishes the deterministic observability-foundation contract (gpt-5)
