@@ -41,6 +41,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.claude/scheduled_tasks.lock
+.claude/skills/sprint-status-to-openbrain/
 
 # Logs
 *.log
