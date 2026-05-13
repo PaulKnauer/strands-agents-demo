@@ -57,6 +57,18 @@ class TestAgentCoreRuntimeRoleStack:
             },
         )
 
+    def test_observability_permissions_are_explained_in_outputs(self):
+        template = _template()
+
+        template.has_output(
+            "AgentCoreObservabilityPermissions",
+            {
+                "Value": Match.string_like_regexp(
+                    "CloudWatch Logs, X-Ray telemetry, and bedrock-agentcore metrics"
+                )
+            },
+        )
+
 
 class TestAgentCoreRuntimeRoleMakeTargets:
     def test_cdk_app_loads_dotenv(self):

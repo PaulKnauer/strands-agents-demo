@@ -4,19 +4,26 @@ import os
 import pytest
 from datetime import date
 from unittest.mock import MagicMock, patch
-from botocore.exceptions import ClientError, ReadTimeoutError
+from botocore.exceptions import ClientError, NoCredentialsError, ReadTimeoutError
 
 from deploy.verify import (
+    _DEFAULT_PERF_BUDGET_SECONDS,
     _build_runtime_session_id,
+    _cloudwatch_console_url,
     _find_existing_runtime,
     _decode_body,
     _expected_days,
     _contains_expected_age,
+    _preflight_observability_prerequisites,
     _positive_int_env,
 )
 
 AGENT_ARN = "arn:aws:bedrock-agentcore:us-east-1:123456:agent-runtime/test_agent"
-ENV = {"AWS_REGION": "us-east-1", "AGENT_NAME": "test-agent"}
+ENV = {
+    "AWS_REGION": "us-east-1",
+    "AGENT_NAME": "test-agent",
+    "MODEL_ID": "us.amazon.nova-micro-v1:0",
+}
 
 
 def _client_error(code: str, message: str = "error") -> ClientError:
@@ -52,9 +59,46 @@ def _make_data(body: str = '"You are 13149 days old."') -> MagicMock:
     return mock
 
 
-def _boto3_factory(ctrl, data):
+def _make_cloudformation() -> MagicMock:
+    mock = MagicMock()
+    mock.describe_stacks.return_value = {"Stacks": [{"StackStatus": "CREATE_COMPLETE"}]}
+    return mock
+
+
+def _make_xray() -> MagicMock:
+    mock = MagicMock()
+    mock.get_trace_segment_destination.return_value = {
+        "Destination": "CloudWatchLogs",
+        "Status": "ACTIVE",
+    }
+    return mock
+
+
+def _boto3_factory(
+    ctrl,
+    data,
+    *,
+    cloudformation=None,
+    xray=None,
+    expected_region="us-east-1",
+    fail_observability_client=False,
+):
+    cloudformation = cloudformation or _make_cloudformation()
+    xray = xray or _make_xray()
+
     def factory(service_name, **kwargs):
-        return ctrl if service_name == "bedrock-agentcore-control" else data
+        assert kwargs.get("region_name") == expected_region
+        if fail_observability_client and service_name == "cloudformation":
+            raise NoCredentialsError()
+        if service_name == "cloudformation":
+            return cloudformation
+        if service_name == "xray":
+            return xray
+        if service_name == "bedrock-agentcore-control":
+            return ctrl
+        if service_name == "bedrock-agentcore":
+            return data
+        raise AssertionError(f"Unexpected boto3 service requested: {service_name}")
 
     return factory
 
@@ -85,6 +129,13 @@ class TestBuildRuntimeSessionId:
         value = _build_runtime_session_id()
         assert value.startswith("verify-session-")
         assert len(value) == len("verify-session-") + 32
+
+
+class TestCloudWatchConsoleUrl:
+    def test_includes_region_and_fragment(self):
+        assert _cloudwatch_console_url("us-west-2", "xray:traces") == (
+            "https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#xray:traces"
+        )
 
 
 # ── _expected_days ────────────────────────────────────────────────────────────
@@ -157,7 +208,12 @@ class TestContainsExpectedAge:
 class TestPositiveIntEnv:
     def test_default_when_unset(self):
         with patch.dict(os.environ, {}, clear=True):
-            assert _positive_int_env("VERIFY_PERF_BUDGET_SECONDS", 5) == 5
+            assert (
+                _positive_int_env(
+                    "VERIFY_PERF_BUDGET_SECONDS", _DEFAULT_PERF_BUDGET_SECONDS
+                )
+                == 7
+            )
 
     def test_reads_positive_integer(self):
         with patch.dict(os.environ, {"VERIFY_PERF_BUDGET_SECONDS": "10"}):
@@ -169,7 +225,9 @@ class TestPositiveIntEnv:
             patch.dict(os.environ, {"VERIFY_PERF_BUDGET_SECONDS": value}),
             pytest.raises(SystemExit) as exc,
         ):
-            _positive_int_env("VERIFY_PERF_BUDGET_SECONDS", 5)
+            _positive_int_env(
+                "VERIFY_PERF_BUDGET_SECONDS", _DEFAULT_PERF_BUDGET_SECONDS
+            )
         assert exc.value.code == 1
         assert "positive integer" in capsys.readouterr().out
 
@@ -236,6 +294,112 @@ class TestFindExistingRuntime:
         assert second_call_kwargs["nextToken"] == "tok-1"
 
 
+# ── observability preflight ──────────────────────────────────────────────────
+
+
+class TestObservabilityPreflight:
+    def test_reports_cdk_stack_and_transaction_search_success(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {
+            "Stacks": [{"StackStatus": "CREATE_COMPLETE"}]
+        }
+        xray = MagicMock()
+        xray.get_trace_segment_destination.return_value = {
+            "Destination": "CloudWatchLogs",
+            "Status": "ACTIVE",
+        }
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "StrandsDemoAgentCoreRuntimeRoleStack: CREATE_COMPLETE" in out
+        assert "StrandsDemoTransactionSearchStack: CREATE_COMPLETE" in out
+        assert "Transaction Search: CloudWatchLogs / ACTIVE" in out
+
+    def test_reports_missing_stack_with_make_target(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.side_effect = _client_error(
+            "ValidationError", "Stack does not exist"
+        )
+        xray = MagicMock()
+        xray.get_trace_segment_destination.return_value = {
+            "Destination": "CloudWatchLogs",
+            "Status": "ACTIVE",
+        }
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "make create-role" in out
+        assert "make transaction-search" in out
+
+    def test_missing_runtime_role_stack_mentions_model_id(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.side_effect = [
+            _client_error("ValidationError", "Stack does not exist"),
+            {"Stacks": [{"StackStatus": "CREATE_COMPLETE"}]},
+        ]
+        xray = _make_xray()
+
+        _preflight_observability_prerequisites(cloudformation, xray, model_id=None)
+
+        out = capsys.readouterr().out
+        assert "MODEL_ID is not set" in out
+        assert "AGENT_NAME and MODEL_ID" in out
+
+    def test_empty_cloudformation_stacks_response_is_nonfatal(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {"Stacks": []}
+        xray = _make_xray()
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "returned no stacks" in out
+        assert "Traceback" not in out
+
+    def test_transaction_search_pending_reports_wait_not_drift(self, capsys):
+        cloudformation = _make_cloudformation()
+        xray = MagicMock()
+        xray.get_trace_segment_destination.return_value = {
+            "Destination": "CloudWatchLogs",
+            "Status": "PENDING",
+        }
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "still propagating" in out
+        assert "manual Transaction Search drift" not in out
+
+    def test_xray_method_missing_is_nonfatal(self, capsys):
+        cloudformation = _make_cloudformation()
+        xray = MagicMock()
+        del xray.get_trace_segment_destination
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "does not expose get_trace_segment_destination" in out
+
+    def test_reports_manual_transaction_search_drift(self, capsys):
+        cloudformation = MagicMock()
+        cloudformation.describe_stacks.return_value = {
+            "Stacks": [{"StackStatus": "CREATE_COMPLETE"}]
+        }
+        xray = MagicMock()
+        xray.get_trace_segment_destination.return_value = {
+            "Destination": "XRay",
+            "Status": "PENDING",
+        }
+
+        _preflight_observability_prerequisites(cloudformation, xray)
+
+        out = capsys.readouterr().out
+        assert "manual Transaction Search drift" in out
+        assert "disable it before the first CDK deploy" in out
+
+
 # ── main() ────────────────────────────────────────────────────────────────────
 
 
@@ -249,7 +413,7 @@ class TestMain:
         timing = monotonic_values or [
             0.0,
             1.0,
-        ]  # default: 1s elapsed (within 5s budget)
+        ]  # default: 1s elapsed (within default budget)
         env = env or ENV
 
         with (
@@ -271,10 +435,36 @@ class TestMain:
         assert "13,149" in captured.out
         assert "Verification complete." in captured.out
         assert "Result: PASS" in captured.out
+        assert "CloudWatch GenAI observability" in captured.out
+        assert "get_today_date tool traces and the final response" in captured.out
+        assert "?region=us-east-1#gen-ai-observability:" in captured.out
+        assert "?region=us-east-1#xray:traces" in captured.out
         assert "Runtime session ID:" in captured.out
         assert data.invoke_agent_runtime.call_args.kwargs[
             "runtimeSessionId"
         ].startswith("verify-session-")
+
+    def test_observability_client_setup_failure_does_not_block_verify(self, capsys):
+        from deploy.verify import main
+
+        ctrl = _make_ctrl(found=True)
+        data = _make_data('"You are 13149 days old."')
+
+        with (
+            patch("deploy.verify.load_dotenv"),
+            patch.dict(os.environ, ENV, clear=False),
+            patch(
+                "deploy.verify.boto3.client",
+                side_effect=_boto3_factory(ctrl, data, fail_observability_client=True),
+            ),
+            patch("deploy.verify.time.monotonic", side_effect=[0.0, 1.0]),
+            patch("deploy.verify._expected_days", return_value=13149),
+        ):
+            main()
+
+        out = capsys.readouterr().out
+        assert "Skipped non-fatal observability preflight" in out
+        assert "Result: PASS" in out
 
     def test_missing_env_var_exits_1(self):
         from deploy.verify import main
@@ -382,7 +572,7 @@ class TestMain:
     def test_perf_budget_env_override(self, capsys):
         ctrl = _make_ctrl(found=True)
         data = _make_data('"You are 13149 days old."')
-        # elapsed 8s is above default 5s budget but below the 10s override — should pass
+        # elapsed 8s is above default 7s budget but below the 10s override.
         self._run_main(
             ctrl,
             data,
@@ -390,6 +580,14 @@ class TestMain:
             monotonic_values=[0.0, 8.0],
         )
         assert "Result: PASS" in capsys.readouterr().out
+
+    def test_default_perf_budget_is_seven_seconds(self, capsys):
+        ctrl = _make_ctrl(found=True)
+        data = _make_data('"You are 13149 days old."')
+
+        self._run_main(ctrl, data, monotonic_values=[0.0, 6.5])
+
+        assert "within 7s budget" in capsys.readouterr().out
 
     def test_wrong_age_exits_1(self, capsys):
         ctrl = _make_ctrl(found=True)

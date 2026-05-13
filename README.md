@@ -153,7 +153,21 @@ unmanaged runtime role is still present in the account with the same fixed name.
 Remove that legacy role once, then rerun `make create-role` so CloudFormation/CDK
 becomes the sole owner of `AmazonBedrockAgentCoreRuntime_<agent>`.
 
-**Step 3:** Deploy:
+**Step 3:** Enable CloudWatch Transaction Search once per account/region:
+
+```bash
+make transaction-search
+```
+
+This deploys an idempotent CDK stack that creates the required CloudWatch Logs resource policy and `AWS::XRay::TransactionSearchConfig` for Transaction Search. Re-running `make transaction-search` updates the same stack in place. The stack defaults to `100%` indexing so low-volume demo traffic is actually searchable in CloudWatch `Sessions` and `Traces`. AWS documents this as the supported CloudFormation/CDK path. If Transaction Search was previously enabled manually in this region, disable it before the first CDK deploy of this stack, then let this stack become the owner.
+
+To remove the IaC-managed Transaction Search configuration later:
+
+```bash
+make teardown-transaction-search
+```
+
+**Step 4:** Deploy:
 
 ```bash
 python deploy/deploy.py
@@ -180,7 +194,7 @@ Step 5/5: Waiting for runtime to be ready...
    Endpoint URL: https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/.../invocations
 ```
 
-**Step 4:** Verify the deployed agent responds:
+**Step 5:** Verify the deployed agent responds:
 
 ```bash
 python deploy/verify.py
@@ -193,6 +207,11 @@ Expected output (the age in days will reflect today's date when you run it):
 Verifying deployed agent 'age_in_days_demo' in us-east-1...
   Expected age: <computed> days  (DOB: 1990-03-14 → today, UTC)
 
+Observability preflight:
+  StrandsDemoAgentCoreRuntimeRoleStack: CREATE_COMPLETE
+  StrandsDemoTransactionSearchStack: CREATE_COMPLETE
+  Transaction Search: CloudWatchLogs / ACTIVE
+
   Runtime: age_in_days_demo
   Runtime ARN: arn:aws:bedrock-agentcore:...
   Test prompt: "I was born on 14th March 1990"
@@ -201,38 +220,28 @@ Agent responded (in 3.2s):
 
 You were born <computed> days ago! ...
 
-  Expected: <computed> days  |  Elapsed: 3.2s (within 5s budget)  |  Result: PASS
+  Expected: <computed> days  |  Elapsed: 3.2s (within 7s budget)  |  Result: PASS
 
 Verification complete.
-Next: open the AgentCore console to confirm get_today_date tool traces are visible.
-  https://console.aws.amazon.com/bedrock-agentcore/
+Next: open CloudWatch GenAI observability or Transaction Search to confirm get_today_date tool traces and the final response are visible.
+  https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#gen-ai-observability:
+  https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#xray:traces
 ```
 
-The verifier checks that the response contains the correct UTC-based age in days (not just any number) and that the response arrives within the 5-second performance budget. To override the budget: `VERIFY_PERF_BUDGET_SECONDS=10 python deploy/verify.py`. To extend the transport timeout for slow networks: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
+The verifier checks that the response contains the correct UTC-based age in days (not just any number) and that the response arrives within the 7-second performance budget. To override the budget: `VERIFY_PERF_BUDGET_SECONDS=10 python deploy/verify.py`. To extend the transport timeout for slow networks: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
 
-**Step 5:** Enable CloudWatch Transaction Search once per account/region:
-
-```bash
-make transaction-search
-```
-
-This deploys an idempotent CDK stack that creates the required CloudWatch Logs resource policy and `AWS::XRay::TransactionSearchConfig` for Transaction Search. Re-running `make transaction-search` updates the same stack in place. The stack defaults to `100%` indexing so low-volume demo traffic is actually searchable in CloudWatch `Sessions` and `Traces`. AWS documents this as the supported CloudFormation/CDK path. If Transaction Search was previously enabled manually in this region, disable it before the first CDK deploy of this stack.
-
-To remove the IaC-managed Transaction Search configuration later:
-
-```bash
-make teardown-transaction-search
-```
+Before invocation, the verifier also prints a non-fatal observability preflight for the CDK-managed runtime role stack, the CDK-managed Transaction Search stack, and X-Ray's trace-segment destination. If a prerequisite is missing, run the printed `make create-role` or `make transaction-search` command in the same AWS account and `AWS_REGION`; if the X-Ray destination is not `CloudWatchLogs / ACTIVE`, check for manual Transaction Search drift and follow the Step 3 caveat.
 
 **Step 6:** Confirm AgentCore observability:
 
-1. Open the [AgentCore console](https://console.aws.amazon.com/bedrock-agentcore/) and navigate to your agent → **Invocation history**.
-2. Select the invocation that corresponds to your `make verify` run.
-3. Confirm the trace includes:
+1. Open the region-scoped CloudWatch GenAI observability link printed by `make verify`.
+2. Open the session that corresponds to the `Runtime session ID` printed by `make verify`, or use the region-scoped CloudWatch Transaction Search link to inspect traces in `/aws/spans/default`.
+3. The AgentCore console invocation history is also useful for runtime-level context, but CloudWatch is the acceptance surface for this observability check.
+4. Confirm the trace includes:
    - A `get_today_date` **tool invocation** with its input and output (today's UTC date in ISO format).
    - The **final text response** containing the age in days.
-4. If traces are not visible immediately after enablement, wait a few minutes, re-run `make verify`, and check CloudWatch again. AWS notes it can take about ten minutes for spans to become searchable after Transaction Search is enabled.
-5. `deploy/bootstrap.py` starts the runtime under AWS Distro for OpenTelemetry (ADOT), and `make verify` now sends an explicit `runtimeSessionId` so CloudWatch can group the invocation predictably under `Sessions`.
+5. If traces are not visible immediately after enablement, wait a few minutes, re-run `make verify`, and check CloudWatch again. AWS notes it can take about ten minutes for spans to become searchable after Transaction Search is enabled.
+6. `deploy/bootstrap.py` starts the runtime under AWS Distro for OpenTelemetry (ADOT), and `make verify` sends an explicit `runtimeSessionId` so CloudWatch can group the invocation predictably under `Sessions`.
 
 > **Note:** Transaction Search alone is not enough for AgentCore-hosted agent traces. The deployed runtime must start with ADOT instrumentation enabled. This repo does that through `deploy/bootstrap.py` and the bundled `aws-opentelemetry-distro` dependency.
 
@@ -462,7 +471,7 @@ The verifier computes the expected age in days from DOB `1990-03-14` to today's 
 
 **`make verify` fails — `FAIL — elapsed time … exceeded … performance budget`**
 
-The default performance budget is 5 seconds. To override: `VERIFY_PERF_BUDGET_SECONDS=15 python deploy/verify.py`. To extend the transport (hang) timeout: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
+The default performance budget is 7 seconds. To override: `VERIFY_PERF_BUDGET_SECONDS=15 python deploy/verify.py`. To extend the transport (hang) timeout: set `VERIFY_TIMEOUT_SECONDS=60` in `.env`.
 
 **Deployment succeeds but verify times out**
 

@@ -42,6 +42,19 @@ class TestTransactionSearchStack:
             {"IndexingPercentage": 100},
         )
 
+    def test_outputs_console_and_manual_drift_guidance(self):
+        template = _template()
+
+        template.has_output("TransactionSearchConsoleUrl", {})
+        template.has_output(
+            "TransactionSearchManualEnablementWarning",
+            {
+                "Value": Match.string_like_regexp(
+                    "disable it before the first CDK deploy"
+                )
+            },
+        )
+
     def test_dependency_orders_config_after_resource_policy(self):
         template = _template().to_json()
         config_resource = template["Resources"]["TransactionSearchConfig"]

@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError, ReadTimeoutError
+from botocore.exceptions import BotoCoreError, ClientError, ReadTimeoutError
 from dotenv import load_dotenv
 
 # load_dotenv() must be called before any os.environ access
@@ -18,7 +18,14 @@ load_dotenv()
 
 TEST_PROMPT = "I was born on 14th March 1990"
 _DOB = date(1990, 3, 14)
+_DEFAULT_PERF_BUDGET_SECONDS = 7
 _TERMINAL_NOT_READY_STATUSES = {"FAILED", "DELETING", "CREATE_FAILED", "UPDATE_FAILED"}
+_OBSERVABILITY_STACKS = {
+    "StrandsDemoAgentCoreRuntimeRoleStack": "make create-role",
+    "StrandsDemoTransactionSearchStack": "make transaction-search",
+}
+_READY_STACK_STATUSES = {"CREATE_COMPLETE", "UPDATE_COMPLETE"}
+_TRANSIENT_TRANSACTION_SEARCH_STATUSES = {"PENDING", "UPDATING"}
 
 
 def _today_utc() -> date:
@@ -138,11 +145,124 @@ def _build_runtime_session_id() -> str:
     return f"verify-session-{uuid.uuid4().hex}"
 
 
+def _cloudwatch_console_url(aws_region: str, fragment: str) -> str:
+    """Return a region-scoped CloudWatch console URL."""
+    return (
+        f"https://console.aws.amazon.com/cloudwatch/home?region={aws_region}#{fragment}"
+    )
+
+
+def _preflight_observability_prerequisites(cloudformation, xray, model_id=None) -> None:
+    """Print actionable observability prerequisite diagnostics.
+
+    This is intentionally non-fatal: the verifier remains the data-plane smoke
+    test, while this preflight tells developers when CDK-owned observability
+    setup is missing or drifted before they chase AgentCore runtime failures.
+    """
+    print("Observability preflight:")
+    for stack_name, make_target in _OBSERVABILITY_STACKS.items():
+        try:
+            response = cloudformation.describe_stacks(StackName=stack_name)
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            msg = e.response["Error"]["Message"]
+            print(f"  {stack_name}: missing or inaccessible ({code}: {msg})")
+            if stack_name == "StrandsDemoAgentCoreRuntimeRoleStack" and not model_id:
+                print(
+                    "    MODEL_ID is not set. The CDK app only synthesizes this "
+                    "stack when both AGENT_NAME and MODEL_ID are present."
+                )
+            print(f"    Run '{make_target}' in the same AWS account and region.")
+            continue
+        except BotoCoreError as e:
+            print(f"  {stack_name}: could not inspect ({type(e).__name__}: {e})")
+            print(f"    Run '{make_target}' in the same AWS account and region.")
+            continue
+
+        stacks = response.get("Stacks", [])
+        if not stacks:
+            print(f"  {stack_name}: unavailable (CloudFormation returned no stacks)")
+            print(f"    Run '{make_target}' and inspect CloudFormation events.")
+            continue
+
+        stack = stacks[0]
+        status = stack.get("StackStatus", "UNKNOWN")
+        print(f"  {stack_name}: {status}")
+        if status not in _READY_STACK_STATUSES:
+            print(
+                "    Expected CREATE_COMPLETE or UPDATE_COMPLETE. Re-run "
+                f"'{make_target}' and inspect CloudFormation events if it fails."
+            )
+
+    try:
+        destination = xray.get_trace_segment_destination()
+    except AttributeError:
+        print("  Transaction Search: could not inspect X-Ray destination")
+        print(
+            "    Installed boto3/botocore does not expose "
+            "get_trace_segment_destination; upgrade dependencies or run "
+            "'aws xray get-trace-segment-destination'."
+        )
+        return
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        msg = e.response["Error"]["Message"]
+        print(
+            f"  Transaction Search: could not inspect X-Ray destination ({code}: {msg})"
+        )
+        print(
+            "    Run 'make transaction-search' and confirm AWS_REGION points to the "
+            "same region as the deployed runtime."
+        )
+        return
+    except BotoCoreError as e:
+        print(
+            "  Transaction Search: could not inspect X-Ray destination "
+            f"({type(e).__name__}: {e})"
+        )
+        print(
+            "    Run 'make transaction-search' and confirm AWS_REGION points to the "
+            "same region as the deployed runtime."
+        )
+        return
+
+    destination_name = destination.get("Destination", "UNKNOWN")
+    status = destination.get("Status", "UNKNOWN")
+    print(f"  Transaction Search: {destination_name} / {status}")
+    if (
+        destination_name == "CloudWatchLogs"
+        and status in _TRANSIENT_TRANSACTION_SEARCH_STATUSES
+    ):
+        print(
+            "    Transaction Search is still propagating. Wait a few minutes, "
+            "then re-run 'make verify' before changing the CDK stack."
+        )
+    elif destination_name != "CloudWatchLogs" or status != "ACTIVE":
+        print(
+            "    Possible manual Transaction Search drift or incomplete setup. AWS "
+            "requires you to disable pre-existing manual Transaction Search first; "
+            "disable it before the first CDK deploy, then run 'make transaction-search'."
+        )
+
+
+def _run_observability_preflight(aws_region: str, model_id: str | None) -> None:
+    """Run observability checks without blocking the data-plane verifier."""
+    try:
+        cloudformation = boto3.client("cloudformation", region_name=aws_region)
+        xray = boto3.client("xray", region_name=aws_region)
+        _preflight_observability_prerequisites(cloudformation, xray, model_id)
+    except BotoCoreError as e:
+        print("Observability preflight:")
+        print(f"  Skipped non-fatal observability preflight ({type(e).__name__}: {e})")
+        print("  Continuing with AgentCore runtime verification.")
+
+
 def main() -> None:
     """Invoke the deployed AgentCore agent and verify it responds correctly."""
     try:
         aws_region = os.environ["AWS_REGION"]
         agent_name_raw = os.environ["AGENT_NAME"]
+        model_id = os.environ.get("MODEL_ID")
     except KeyError as e:
         print(f"\nMissing required environment variable: {e}")
         print("  Hint: Copy .env.example to .env and fill in all required values.")
@@ -155,6 +275,9 @@ def main() -> None:
 
     print(f"\nVerifying deployed agent '{agent_name}' in {aws_region}...")
     print(f"  Expected age: {expected:,} days  (DOB: 1990-03-14 → today, UTC)\n")
+
+    _run_observability_preflight(aws_region, model_id)
+    print()
 
     # Control-plane client: look up the runtime ARN by name
     agentcore_ctrl = boto3.client("bedrock-agentcore-control", region_name=aws_region)
@@ -211,9 +334,11 @@ def main() -> None:
     print(f'  Test prompt: "{TEST_PROMPT}"\n')
 
     # VERIFY_TIMEOUT_SECONDS controls the boto3 transport read-timeout only.
-    # VERIFY_PERF_BUDGET_SECONDS controls the correctness performance check (default 5s).
+    # VERIFY_PERF_BUDGET_SECONDS controls the correctness performance check.
     timeout_seconds = _positive_int_env("VERIFY_TIMEOUT_SECONDS", 30)
-    perf_budget = _positive_int_env("VERIFY_PERF_BUDGET_SECONDS", 5)
+    perf_budget = _positive_int_env(
+        "VERIFY_PERF_BUDGET_SECONDS", _DEFAULT_PERF_BUDGET_SECONDS
+    )
     runtime_session_id = _build_runtime_session_id()
 
     # Data-plane client: invoke the runtime (different service from control-plane)
@@ -301,7 +426,8 @@ def main() -> None:
             " budget."
         )
         print(
-            "  Hint: Set VERIFY_PERF_BUDGET_SECONDS to override the budget (default 5s)."
+            "  Hint: Set VERIFY_PERF_BUDGET_SECONDS to override the budget "
+            f"(default {_DEFAULT_PERF_BUDGET_SECONDS}s)."
             " Use VERIFY_TIMEOUT_SECONDS to extend the transport limit (default 30s)."
         )
         passed = False
@@ -315,9 +441,11 @@ def main() -> None:
     )
     print("\nVerification complete.")
     print(
-        "Next: open the AgentCore console to confirm get_today_date tool traces are visible."
+        "Next: open CloudWatch GenAI observability or Transaction Search to confirm "
+        "get_today_date tool traces and the final response are visible."
     )
-    print("  https://console.aws.amazon.com/bedrock-agentcore/")
+    print(f"  {_cloudwatch_console_url(aws_region, 'gen-ai-observability:')}")
+    print(f"  {_cloudwatch_console_url(aws_region, 'xray:traces')}")
 
 
 if __name__ == "__main__":

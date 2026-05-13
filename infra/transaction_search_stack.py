@@ -73,3 +73,18 @@ class TransactionSearchStack(Stack):
             value=str(indexing_percentage),
             description="Percentage of ingested spans indexed for trace summary search.",
         )
+        CfnOutput(
+            self,
+            "TransactionSearchConsoleUrl",
+            value="https://console.aws.amazon.com/cloudwatch/home#xray:traces",
+            description="CloudWatch Transaction Search console for AgentCore traces.",
+        )
+        CfnOutput(
+            self,
+            "TransactionSearchManualEnablementWarning",
+            value=(
+                "If Transaction Search was already enabled manually in this "
+                "account/region, disable it before the first CDK deploy of this stack."
+            ),
+            description="AWS CloudFormation/CDK caveat for pre-existing manual setup.",
+        )

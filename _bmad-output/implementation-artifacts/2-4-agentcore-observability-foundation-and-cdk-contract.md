@@ -1,6 +1,6 @@
 # Story 2.4: AgentCore Observability Foundation and CDK Contract
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -34,37 +34,46 @@ so that I can verify traces through a deterministic AWS setup instead of ad hoc 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Reconcile the observability infrastructure contract across CDK entrypoints and stacks (AC: #1, #4)
-  - [ ] Inspect `infra/app.py`, `infra/transaction_search_stack.py`, and `infra/agentcore_runtime_role_stack.py` before editing; preserve the current CDK ownership model rather than reintroducing direct IAM or console-only setup
-  - [ ] Confirm the CDK app loads `.env` before reading `AGENT_NAME` and `MODEL_ID`, and keep runtime-role stack creation conditional on those values being present
-  - [ ] Tighten stack outputs or comments where needed so a developer can tell which stack enables Transaction Search and which stack owns the AgentCore runtime role
-  - [ ] Preserve least-privilege intent in the runtime role stack and avoid broadening resources to `"*"` unless an AWS requirement makes it unavoidable and is documented
+- [x] Task 1: Reconcile the observability infrastructure contract across CDK entrypoints and stacks (AC: #1, #4)
+  - [x] Inspect `infra/app.py`, `infra/transaction_search_stack.py`, and `infra/agentcore_runtime_role_stack.py` before editing; preserve the current CDK ownership model rather than reintroducing direct IAM or console-only setup
+  - [x] Confirm the CDK app loads `.env` before reading `AGENT_NAME` and `MODEL_ID`, and keep runtime-role stack creation conditional on those values being present
+  - [x] Tighten stack outputs or comments where needed so a developer can tell which stack enables Transaction Search and which stack owns the AgentCore runtime role
+  - [x] Preserve least-privilege intent in the runtime role stack and avoid broadening resources to `"*"` unless an AWS requirement makes it unavoidable and is documented
 
-- [ ] Task 2: Make the observability setup and preflight path explicit in developer-facing commands and docs (AC: #1, #2, #3)
-  - [ ] Inspect `Makefile`, `README.md`, `deploy/verify.py`, and `deploy/bootstrap.py` before editing; preserve the current deploy/verify/bootstrap split
-  - [ ] Define the exact supported setup order for observability prerequisites, including role provisioning, Transaction Search provisioning, deployment, verification, and trace inspection
-  - [ ] Add or tighten preflight checks or guidance so the verification flow calls out missing CDK-managed prerequisites before a developer assumes AgentCore itself is broken
-  - [ ] Document the expected success evidence precisely: `get_today_date` tool activity, final response visibility, and the console or CloudWatch surfaces where they should appear
-  - [ ] Document the one-time/manual caveat AWS calls out for Transaction Search so the repo explains how to handle pre-existing manual enablement or drift
+- [x] Task 2: Make the observability setup and preflight path explicit in developer-facing commands and docs (AC: #1, #2, #3)
+  - [x] Inspect `Makefile`, `README.md`, `deploy/verify.py`, and `deploy/bootstrap.py` before editing; preserve the current deploy/verify/bootstrap split
+  - [x] Define the exact supported setup order for observability prerequisites, including role provisioning, Transaction Search provisioning, deployment, verification, and trace inspection
+  - [x] Add or tighten preflight checks or guidance so the verification flow calls out missing CDK-managed prerequisites before a developer assumes AgentCore itself is broken
+  - [x] Document the expected success evidence precisely: `get_today_date` tool activity, final response visibility, and the console or CloudWatch surfaces where they should appear
+  - [x] Document the one-time/manual caveat AWS calls out for Transaction Search so the repo explains how to handle pre-existing manual enablement or drift
 
-- [ ] Task 3: Preserve the runtime/observability boundary and avoid misleading shortcuts (AC: #2, #3)
-  - [ ] Do not add custom application logging solely to satisfy observability; managed AgentCore and CloudWatch remain the acceptance surface
-  - [ ] Do not collapse local Strands execution and deployed AgentCore verification into one path; keep `agent.py` out of scope unless a proven defect forces a synchronized prompt note
-  - [ ] Preserve `deploy/bootstrap.py` as the ADOT bootstrap entrypoint and ensure any documentation changes still describe why it exists
-  - [ ] Keep the trace-verification contract specific to deployed AgentCore runtime behavior, not local REPL behavior
+- [x] Task 3: Preserve the runtime/observability boundary and avoid misleading shortcuts (AC: #2, #3)
+  - [x] Do not add custom application logging solely to satisfy observability; managed AgentCore and CloudWatch remain the acceptance surface
+  - [x] Do not collapse local Strands execution and deployed AgentCore verification into one path; keep `agent.py` out of scope unless a proven defect forces a synchronized prompt note
+  - [x] Preserve `deploy/bootstrap.py` as the ADOT bootstrap entrypoint and ensure any documentation changes still describe why it exists
+  - [x] Keep the trace-verification contract specific to deployed AgentCore runtime behavior, not local REPL behavior
 
-- [ ] Task 4: Add deterministic tests for the observability foundation contract (AC: #1, #3, #4)
-  - [ ] Extend `tests/unit/test_transaction_search_stack.py` for any new stack outputs, validation, or drift-protection behavior
-  - [ ] Extend `tests/unit/test_agentcore_runtime_role_stack.py` for any runtime-role observability permission or output changes
-  - [ ] Add or tighten tests for `infra/app.py` and `Makefile` if the observability stack wiring or targets change
-  - [ ] If `deploy/verify.py` gains preflight logic, add focused unit coverage without turning mock-only tests into fake integration tests
+- [x] Task 4: Add deterministic tests for the observability foundation contract (AC: #1, #3, #4)
+  - [x] Extend `tests/unit/test_transaction_search_stack.py` for any new stack outputs, validation, or drift-protection behavior
+  - [x] Extend `tests/unit/test_agentcore_runtime_role_stack.py` for any runtime-role observability permission or output changes
+  - [x] Add or tighten tests for `infra/app.py` and `Makefile` if the observability stack wiring or targets change
+  - [x] If `deploy/verify.py` gains preflight logic, add focused unit coverage without turning mock-only tests into fake integration tests
 
-- [ ] Task 5: Run deterministic validation and record remaining live-verification boundaries (AC: #1, #2, #3, #4)
-  - [ ] Run `venv/bin/black --check infra/app.py infra/transaction_search_stack.py infra/agentcore_runtime_role_stack.py`
-  - [ ] Run `venv/bin/python -m pytest tests/unit/test_transaction_search_stack.py tests/unit/test_agentcore_runtime_role_stack.py`
-  - [ ] Run any additional targeted test files changed by this story
-  - [ ] Run `venv/bin/python -m pytest`
-  - [ ] If live AWS validation is not performed for this story, state plainly that Story 2.3 remains the place where final runtime invocation and trace confirmation are proven
+- [x] Task 5: Run deterministic validation and record remaining live-verification boundaries (AC: #1, #2, #3, #4)
+  - [x] Run `venv/bin/black --check infra/app.py infra/transaction_search_stack.py infra/agentcore_runtime_role_stack.py`
+  - [x] Run `venv/bin/python -m pytest tests/unit/test_transaction_search_stack.py tests/unit/test_agentcore_runtime_role_stack.py`
+  - [x] Run any additional targeted test files changed by this story
+  - [x] Run `venv/bin/python -m pytest`
+  - [x] If live AWS validation is not performed for this story, state plainly that Story 2.3 remains the place where final runtime invocation and trace confirmation are proven
+
+### Review Findings
+
+- [x] [Review][Patch] Make observability preflight truly non-fatal for boto3 client construction, Botocore errors, and missing SDK methods [deploy/verify.py:216]
+- [x] [Review][Patch] Distinguish Transaction Search propagation states from real manual drift [deploy/verify.py:190]
+- [x] [Review][Patch] Handle empty or malformed CloudFormation `Stacks` responses without aborting verification [deploy/verify.py:164]
+- [x] [Review][Patch] Tighten verifier test boto3 factory so unexpected services or regions fail tests [tests/unit/test_verify.py:56]
+- [x] [Review][Patch] Surface missing `MODEL_ID` as runtime-role CDK configuration guidance [deploy/verify.py:160]
+- [x] [Review][Patch] Print and document region-scoped CloudWatch console URLs [deploy/verify.py:383]
 
 ## Dev Notes
 
@@ -199,6 +208,8 @@ This is a brownfield reconciliation story. The likely implementation shape is no
 ## Change Log
 
 - 2026-05-12: Ultimate context engine analysis completed - comprehensive developer guide created.
+- 2026-05-12: Implemented observability foundation contract outputs, verifier preflight diagnostics, documentation flow, and deterministic tests.
+- 2026-05-12: Addressed code review findings for non-fatal observability preflight behavior, Transaction Search status handling, runtime configuration diagnostics, stricter tests, and region-scoped console URLs.
 
 ## Dev Agent Record
 
@@ -208,12 +219,34 @@ gpt-5
 
 ### Debug Log References
 
+- 2026-05-12 15:31 SAST: Reviewed AWS AgentCore and CloudWatch Transaction Search documentation for required Transaction Search setup, CloudFormation resources, CloudWatch inspection surfaces, and IAM wildcard constraints for X-Ray/CloudWatch telemetry actions.
+- 2026-05-12 15:33 SAST: Red phase confirmed: targeted tests failed because `_preflight_observability_prerequisites` did not exist.
+- 2026-05-12 15:36 SAST: Targeted unit tests passed: `venv/bin/python -m pytest tests/unit/test_transaction_search_stack.py tests/unit/test_agentcore_runtime_role_stack.py tests/unit/test_verify.py -q`.
+- 2026-05-12 15:36 SAST: Formatting passed: `venv/bin/black --check infra/app.py infra/transaction_search_stack.py infra/agentcore_runtime_role_stack.py deploy/verify.py`.
+- 2026-05-12 15:36 SAST: Full regression suite passed: `venv/bin/python -m pytest`.
+- 2026-05-12 16:19 SAST: Addressed 6 code review patch findings; `venv/bin/black --check deploy/verify.py tests/unit/test_verify.py infra/app.py infra/transaction_search_stack.py infra/agentcore_runtime_role_stack.py` passed.
+- 2026-05-12 16:19 SAST: Review-finding regression tests passed: `venv/bin/python -m pytest tests/unit/test_transaction_search_stack.py tests/unit/test_agentcore_runtime_role_stack.py tests/unit/test_verify.py -q`.
+- 2026-05-12 16:19 SAST: Full regression suite passed after review fixes: `venv/bin/python -m pytest`.
+
 ### Completion Notes List
 
 - Created Story 2.4 to separate deterministic observability-foundation work from Story 2.3 live trace confirmation.
 - Pointed implementation toward the existing CDK stacks, Make targets, and ADOT/verify workflow already present in the repo.
+- Added explicit CDK stack outputs for Transaction Search console/drift guidance and runtime-role observability permission ownership.
+- Added non-fatal verifier preflight diagnostics for missing CDK stacks, stack status problems, X-Ray destination drift, and account/region mismatch guidance.
+- Updated README observability flow to require role provisioning, Transaction Search provisioning, deployment, verification, and CloudWatch trace inspection in that order.
+- Preserved runtime boundaries: no custom application logging, no local `agent.py` changes, and `deploy/bootstrap.py` remains the ADOT bootstrap path.
+- Live AWS invocation and console trace confirmation were not performed in this story; Story 2.3 remains the place where final runtime invocation and trace confirmation are proven.
+- Resolved code review findings by making observability preflight non-fatal across Botocore/client compatibility failures, adding propagation-aware Transaction Search guidance, warning about missing `MODEL_ID`, strengthening verifier mocks, and printing region-scoped CloudWatch links.
 
 ### File List
 
+- `README.md`
 - `_bmad-output/implementation-artifacts/2-4-agentcore-observability-foundation-and-cdk-contract.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `deploy/verify.py`
+- `infra/agentcore_runtime_role_stack.py`
+- `infra/transaction_search_stack.py`
+- `tests/unit/test_agentcore_runtime_role_stack.py`
+- `tests/unit/test_transaction_search_stack.py`
+- `tests/unit/test_verify.py`

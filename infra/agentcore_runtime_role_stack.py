@@ -130,3 +130,11 @@ class AgentCoreRuntimeRoleStack(Stack):
 
         CfnOutput(self, "AgentCoreRuntimeRoleArn", value=role.role_arn)
         CfnOutput(self, "AgentCoreRuntimeRoleName", value=role.role_name)
+        CfnOutput(
+            self,
+            "AgentCoreObservabilityPermissions",
+            value=(
+                "CloudWatch Logs, X-Ray telemetry, and bedrock-agentcore metrics "
+                "permissions are attached to the runtime role."
+            ),
+        )
