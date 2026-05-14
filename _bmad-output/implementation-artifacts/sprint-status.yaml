@@ -1,5 +1,5 @@
 # generated: 2026-05-08 20:42:26 SAST
-# last_updated: 2026-05-13 10:38:35 SAST
+# last_updated: 2026-05-14 14:51:21 SAST
 # project: strands-agents-demo
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08 20:42:26 SAST
-last_updated: 2026-05-13 10:38:35 SAST
+last_updated: 2026-05-14 14:51:21 SAST
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -43,7 +43,7 @@ story_location: _bmad-output/implementation-artifacts
 
 development_status:
   # Epic 1: Local Agent Experience
-  epic-1: in-progress
+  epic-1: done
   1-1-project-scaffold-and-configuration-contract: done
   1-2-local-age-in-days-agent: done
   1-3-adapter-based-local-model-selection: done
@@ -51,7 +51,7 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: AgentCore Deployment and Observability
-  epic-2: in-progress
+  epic-2: done
   2-1-agentcore-deployment-path: done
   2-2-deployed-runtime-adapter-contract: done
   2-3-endpoint-verification-and-observability-confirmation: done
@@ -59,10 +59,10 @@ development_status:
   epic-2-retrospective: done
 
   # Epic 3: Developer Documentation and Project Finalization
-  epic-3: in-progress
+  epic-3: done
   3-1-comprehensive-readme: done
-  3-2-inline-explanation-and-structure-clarity: backlog
-  epic-3-retrospective: optional
+  3-2-inline-explanation-and-structure-clarity: done
+  epic-3-retrospective: done
 
   # Epic 4: Multi-Provider Model Expansion
   epic-4: backlog

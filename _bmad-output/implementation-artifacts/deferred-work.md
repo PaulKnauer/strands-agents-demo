@@ -5,3 +5,7 @@
 ## Deferred from: code review of 2-3-endpoint-verification-and-observability-confirmation (2026-05-10)
 
 - Project artifacts contradict each other on AgentCore wheel architecture. Current AWS evidence shows AgentCore requires Linux ARM64-compatible binaries, while older implementation artifacts still reference or warn against `aarch64`. Future cleanup: update historical/generated guidance or project context so ARM64 packaging is canonical for AgentCore direct-code deployment.
+
+## Deferred from: code review of 3-2-inline-explanation-and-structure-clarity (2026-05-13)
+
+- Future DOB returns negative age [deploy/app.py:167]. `_format_age_response()` computes `(today - dob).days` without guarding `dob > today`, so a future birth date can produce a negative age. Deferred because the behavior predates this documentation/comment clarity story and is outside the Story 3.2 change scope.

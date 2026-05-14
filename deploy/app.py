@@ -249,6 +249,8 @@ def _run_agent(prompt: str) -> str:
                                 }
                             }
                         )
+                # Skip the second LLM call when DOB and today's date are resolved:
+                # a deterministic response avoids hallucination and another Bedrock round-trip.
                 if dob and today:
                     if run_span is not None:
                         run_span.set_attribute("tool.get_today_date.used", True)

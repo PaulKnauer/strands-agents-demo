@@ -16,7 +16,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 | One-command AgentCore deployment with IAM provisioning | `deploy/deploy.py` |
 | AgentCore observability via ADOT bootstrap + Transaction Search | `deploy/bootstrap.py`, CloudWatch |
 | Transaction Search enablement via CDK | `infra/transaction_search_stack.py` |
-| Single-file agent that can be forked by changing one file | `agent.py` |
+| Use-case behavior fork points for local and cloud runtimes | `agent.py`, `deploy/app.py` |
 
 **NIST AI RMF responsible-AI patterns:**
 
@@ -297,6 +297,9 @@ strands-agents-demo/
 ├── agent.py              # The agent — @tool, model config, Agent(), REPL loop
 │                         # < 150 lines; local development only (Strands SDK)
 │
+├── model_adapters.py     # Local provider adapter factory (Bedrock, Gemini); local-only,
+│                         # not imported by deploy/app.py
+│
 ├── requirements.txt      # Pinned dependencies
 │
 ├── .env.example          # Environment variable template — copy to .env
@@ -319,9 +322,11 @@ strands-agents-demo/
 │   ├── risk-register.md     # Risk register — identified risks and mitigations (MAP)
 │   └── governance-charter.md  # Governance charter — roles, risk tolerance, review cadence (GOVERN)
 │
+├── infra/                # AWS CDK stacks — runtime IAM role, GitHub Actions OIDC,
+│                         # CloudWatch Transaction Search (deployment support only)
+│
 ├── tests/
 │   ├── unit/             # Unit tests for agent.py, app.py, deploy scripts, compliance hooks
-│   ├── integration/      # Integration tests for the agentic tool-calling loop
 │   └── evals/            # Deterministic behavioural contract tests
 │
 ├── .vscode/
@@ -342,6 +347,8 @@ strands-agents-demo/
 `deploy/app.py` uses **boto3 directly** for the AgentCore cloud runtime. The Strands SDK cannot be pip-installed within AgentCore's 30-second startup window, so `app.py` reimplements the same agent behaviour (identical system prompt and tool) using the Bedrock Converse API. This is a deployment constraint, not an architectural preference.
 
 **The agent behaves identically in both environments.** If you fork this project and add tools, add them to both `agent.py` (`@tool` decorator) and `deploy/app.py` (`TOOLS` list + handler in `_run_agent`).
+
+The deployment scaffolding, VS Code configuration, Makefile targets, and dependency scaffolding are reusable unless your new use case changes runtime dependencies or AWS resource requirements.
 
 ---
 

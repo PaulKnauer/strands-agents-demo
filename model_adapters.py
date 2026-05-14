@@ -13,6 +13,7 @@ class BedrockAdapter:
     def __init__(self, env: Mapping[str, str]):
         self._model_id = env["MODEL_ID"]
         self._region = env["AWS_REGION"]
+        # Guardrails are optional — only wired when GUARDRAIL_ID is configured
         guardrail_id = env.get("GUARDRAIL_ID")
         if guardrail_id:
             self._guardrail_kwargs = {
