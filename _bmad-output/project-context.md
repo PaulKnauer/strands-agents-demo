@@ -1,7 +1,7 @@
 ---
 project_name: 'strands-agents-demo'
 user_name: 'Paul'
-date: '2026-05-07'
+date: '2026-05-14'
 sections_completed:
   [
     'technology_stack',
@@ -59,7 +59,10 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Provider And Model Rules
 
 - Current provider abstraction is explicit: `MODEL_PROVIDER` plus `MODEL_ID`.
-- Existing code only supports `bedrock` and `gemini`; adding Gemma, Moonshot AI, Llama, Qwen, or DeepSeek requires extending the abstraction, tests, docs, and deployment assumptions together.
+- Local adapter code supports `bedrock` and `gemini`; all other local provider values raise `ValueError` today.
+- Deployed AgentCore code supports only `bedrock`; other deployed provider values return an explicit unsupported-provider error before Bedrock invocation.
+- Epic 4 staged expansion targets Gemma, Moonshot/Kimi, Llama, Qwen, and DeepSeek through Amazon Bedrock (Stories 4.2–4.3); these are future work, not currently configured providers. Optional direct-provider or LiteLLM paths outside Bedrock are evaluated later (Story 4.4).
+- Adding any new provider requires extending the abstraction, tests, docs, and deployment assumptions together — never a one-file edit.
 - Do not assume a model change is local-only. Bedrock/AgentCore deployment, IAM scopes, `.env.example`, README, and tests are coupled to provider choices.
 - Bedrock guardrails are optional and must only be wired when `GUARDRAIL_ID` is set.
 - If provider support differs between local and deployed runtimes, document that boundary explicitly rather than hiding it behind silent fallbacks.
@@ -113,4 +116,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Update it when provider support, deployment model, or testing contracts change.
 - Remove rules that become obsolete after the multi-provider refactor lands.
 
-Last Updated: 2026-05-07
+Last Updated: 2026-05-14

@@ -2,7 +2,9 @@
 
 A minimal, forkable reference implementation of an AI agent built with the [Strands Agents SDK](https://strandsagents.com) and deployed to [AWS AgentCore](https://aws.amazon.com/bedrock/agentcore/). The agent calculates a person's age in days from their date of birth — a deliberately simple use case that keeps the focus on the framework patterns, not the business logic.
 
-This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) — governance documentation, audit logging, Bedrock Guardrails, automated red-team CI, and a CloudWatch compliance dashboard. See [NIST AI RMF Compliance](#nist-ai-rmf-compliance) below.
+This project also ships a complete **NIST AI RMF compliance layer** — governance documentation, audit logging, Bedrock Guardrails, automated red-team CI, and a CloudWatch compliance dashboard. See [NIST AI RMF Compliance](#nist-ai-rmf-compliance) below.
+
+The current development sprint (Epic 4) adds **multi-provider model expansion** — Bedrock-first staged support for additional model families. See [Model expansion roadmap](#model-expansion-roadmap) below.
 
 ## What This Demonstrates
 
@@ -11,7 +13,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 | Pattern | Where |
 |---------|-------|
 | `@tool` decorator — defining a custom tool the LLM can call | `agent.py` |
-| Model provider switching via env vars (Bedrock ↔ Gemini, no code change) | `agent.py`, `.env.example` |
+| Model provider switching via env vars (Bedrock ↔ Gemini, local only) | `agent.py`, `.env.example` |
 | Conversational REPL loop with Strands `Agent()` | `agent.py` |
 | One-command AgentCore deployment with IAM provisioning | `deploy/deploy.py` |
 | AgentCore observability via ADOT bootstrap + Transaction Search | `deploy/bootstrap.py`, CloudWatch |
@@ -37,6 +39,7 @@ This project also ships a complete **NIST AI RMF compliance layer** (Epic 4) —
 - [NIST AI RMF Compliance](#nist-ai-rmf-compliance)
 - [Project Structure](#project-structure)
 - [How It Works](#how-it-works)
+- [Model expansion roadmap](#model-expansion-roadmap)
 - [Make Targets](#make-targets)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -262,7 +265,7 @@ make teardown-role
 
 ## NIST AI RMF Compliance
 
-Epic 4 of this project implements a complete [NIST AI Risk Management Framework (AI RMF 1.0)](https://airc.nist.gov/RMF) compliance layer. The four NIST AI RMF functions are addressed as follows:
+This project includes a complete [NIST AI Risk Management Framework (AI RMF 1.0)](https://airc.nist.gov/RMF) compliance layer from earlier work. The four NIST AI RMF functions are addressed as follows:
 
 | NIST Function | Subcategories | Artifact | `make` command |
 |---|---|---|---|
@@ -397,7 +400,19 @@ GOOGLE_API_KEY=your-key-here
 # Also: pip install strands-agents[gemini]
 ```
 
-> **Note:** Provider switching applies to `agent.py` (local development) only. The AgentCore deployed runtime (`deploy/app.py`) uses Bedrock Converse directly and only supports `MODEL_PROVIDER=bedrock`. Multi-provider AgentCore support is planned for a future epic.
+> **Note:** Provider switching applies to `agent.py` (local development) only. The AgentCore deployed runtime (`deploy/app.py`) uses Bedrock Converse directly and only supports `MODEL_PROVIDER=bedrock`.
+
+### Model expansion roadmap
+
+Epic 4 adds Bedrock-first staged support for additional model families. The table below shows what is currently implemented versus what is planned.
+
+| Stage | Providers / families | Status |
+|-------|---------------------|--------|
+| Supported today | `bedrock` (local + deployed), `gemini` (local only) | ✅ |
+| Planned — Bedrock-first | Gemma, Moonshot/Kimi, Llama, Qwen, DeepSeek via Amazon Bedrock | 🔜 Epic 4.2–4.3 |
+| Optional / evaluated later | Direct-provider or LiteLLM paths outside Bedrock | 🔭 Epic 4.4 |
+
+Setting `MODEL_PROVIDER` to a planned family name today (e.g. `gemma`, `llama`, `qwen`) will fail explicitly because those paths are not yet implemented. Local adapter selection raises `ValueError`; AgentCore deployment preflight rejects non-`bedrock` providers; and an already-running deployed runtime returns an unsupported-provider error before invoking Bedrock. Bedrock model IDs and region availability for each planned family will be documented in the Epic 4.3 rollout story.
 
 ---
 

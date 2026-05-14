@@ -125,6 +125,15 @@ class TestEnvExample:
         assert '# Model ID — Bedrock: "us.amazon.nova-micro-v1:0"' in content
         assert '#           — Gemini: "gemini-2.0-flash"' in content
 
+    def test_planned_provider_comment_marks_future_expansion(self):
+        """AC #2 (Story 4.1): planned model families must not read as enabled providers."""
+        content = self._content()
+        assert "Planned additions (not yet enabled)" in content
+        for family in ("Gemma", "Moonshot/Kimi", "Llama", "Qwen", "DeepSeek"):
+            assert family in content
+        assert "will fail explicitly" in content
+        assert "local adapter selection raises ValueError" in content
+
     def test_agent_name_comment_mentions_idempotency(self):
         """AC #3 (Story 1.1): AGENT_NAME comment must describe deployment naming intent."""
         lines = self._lines()
@@ -294,3 +303,56 @@ class TestDeployAppImports:
         assert (
             "import boto3" in source
         ), "deploy/app.py must import boto3 (for Bedrock Converse API calls)."
+
+
+# ── README provider roadmap contract ─────────────────────────────────────────
+
+
+class TestReadmeProviderRoadmap:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / "README.md").read_text()
+
+    def test_nist_section_no_longer_claims_current_epic_4(self):
+        """AC #1 (Story 4.1): current Epic 4 must not also describe NIST compliance."""
+        content = self._content()
+        introduction = content.split("## What This Demonstrates", 1)[0]
+        assert "Epic 4 is the NIST" not in introduction
+        assert "NIST AI RMF compliance layer** (Epic 4)" not in introduction
+        nist_section = content.split("## NIST AI RMF Compliance", 1)[1].split(
+            "## Project Structure", 1
+        )[0]
+        assert "Epic 4 of this project implements" not in nist_section
+        assert "earlier work" in nist_section
+
+    def test_model_expansion_roadmap_preserves_runtime_boundary(self):
+        """AC #2 (Story 4.1): README must distinguish supported and planned provider paths."""
+        content = self._content()
+        assert "### Model expansion roadmap" in content
+        assert "`bedrock` (local + deployed), `gemini` (local only)" in content
+        assert "Planned" in content and "Gemma" in content and "DeepSeek" in content
+        assert "Local adapter selection raises `ValueError`" in content
+        assert "deployment preflight rejects non-`bedrock` providers" in content
+        assert "deployed runtime returns an unsupported-provider error" in content
+
+
+# ── project-context provider boundary contract ───────────────────────────────
+
+
+class TestProjectContextProviderRules:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / "_bmad-output" / "project-context.md").read_text()
+
+    def test_provider_rules_distinguish_local_and_deployed_support(self):
+        """AC #2 (Story 4.1): project context must preserve local/cloud provider boundaries."""
+        content = self._content()
+        assert "Local adapter code supports `bedrock` and `gemini`" in content
+        assert "all other local provider values raise `ValueError`" in content
+        assert "Deployed AgentCore code supports only `bedrock`" in content
+        assert "unsupported-provider error before Bedrock invocation" in content
+
+    def test_provider_rules_mark_expansion_targets_as_future_work(self):
+        """AC #1 (Story 4.1): project context must not imply planned families are enabled."""
+        content = self._content()
+        assert "future work, not currently configured providers" in content
+        for family in ("Gemma", "Moonshot/Kimi", "Llama", "Qwen", "DeepSeek"):
+            assert family in content

@@ -306,23 +306,29 @@ class TestHandleInvocation:
         result = handle_invocation({"prompt": "x" * 4001})
         assert "4000" in result
 
-    def test_missing_model_provider_returns_error(self):
+    @patch("deploy.app.boto3.client")
+    def test_missing_model_provider_returns_error(self, mock_client):
         """AC #2 (Story 2.2): Missing MODEL_PROVIDER must return a clear error, no Bedrock fallback."""
         with patch.dict(os.environ, {}, clear=True):
             result = handle_invocation({"prompt": "born 1 Jan 2020"})
         assert result.startswith("Error:")
         assert "MODEL_PROVIDER" in result
+        mock_client.assert_not_called()
 
-    def test_non_bedrock_provider_returns_error(self):
+    @patch("deploy.app.boto3.client")
+    def test_non_bedrock_provider_returns_error(self, mock_client):
         """AC #2 (Story 2.2): MODEL_PROVIDER='gemini' must return a clear error, not silently use Bedrock."""
         with patch.dict(os.environ, {"MODEL_PROVIDER": "gemini"}):
             result = handle_invocation({"prompt": "born 1 Jan 2020"})
         assert result.startswith("Error:")
         assert "gemini" in result
+        mock_client.assert_not_called()
 
-    def test_unknown_provider_returns_error(self):
+    @patch("deploy.app.boto3.client")
+    def test_unknown_provider_returns_error(self, mock_client):
         """AC #2 (Story 2.2): Unknown MODEL_PROVIDER must return a clear error, no Bedrock call."""
         with patch.dict(os.environ, {"MODEL_PROVIDER": "openai"}):
             result = handle_invocation({"prompt": "born 1 Jan 2020"})
         assert result.startswith("Error:")
         assert "openai" in result
+        mock_client.assert_not_called()
