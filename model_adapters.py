@@ -56,7 +56,25 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         region_constraint="Not region-scoped by AWS_REGION; local-only Google API path.",
         notes="Local only via strands-agents[gemini] optional dependency.",
     ),
-    # Planned Bedrock-first candidate families — enabled=False until Story 4.3 validates them.
+    # Enabled Bedrock-first family alias — Meta Llama 3.1 70B Instruct via Amazon Bedrock.
+    # Concrete Bedrock model IDs (US region deployment default):
+    #   us.meta.llama3-1-70b-instruct-v1:0  — geo-inference (us-east-1 default)
+    #   meta.llama3-1-70b-instruct-v1:0     — single-region (us-west-2)
+    # Requires Bedrock model access in the target account before use.
+    ModelCapabilities(
+        provider="llama",
+        family="Llama",
+        runtimes=("local", "deployed"),
+        enabled=True,
+        supports_converse=True,
+        supports_tools=True,
+        supports_guardrails=True,
+        supports_streaming=True,
+        bedrock_first=True,
+        region_constraint="Configured AWS_REGION; us.meta.llama3-1-70b-instruct-v1:0 recommended for us-east-1 (geo-inference). Single-region ID meta.llama3-1-70b-instruct-v1:0 targets us-west-2.",
+        notes="Bedrock-backed via Meta Llama 3.1 70B Instruct. Not a direct Meta API integration. Enabled in Story 4.3.",
+    ),
+    # Planned Bedrock-first candidate families — enabled=False until a future rollout story validates them.
     ModelCapabilities(
         provider="gemma",
         family="Gemma",
@@ -67,8 +85,8 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         supports_guardrails=False,
         supports_streaming=False,
         bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
-        notes="Planned via Amazon Bedrock in Story 4.3.",
+        region_constraint="Unknown until a future rollout story validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in a future Epic 4 story.",
     ),
     ModelCapabilities(
         provider="moonshot",
@@ -80,8 +98,8 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         supports_guardrails=False,
         supports_streaming=False,
         bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
-        notes="Planned via Amazon Bedrock in Story 4.3. Canonical key: moonshot.",
+        region_constraint="Unknown until a future rollout story validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in a future Epic 4 story. Canonical key: moonshot.",
     ),
     ModelCapabilities(
         provider="kimi",
@@ -93,21 +111,8 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         supports_guardrails=False,
         supports_streaming=False,
         bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region; alias for Moonshot/Kimi.",
-        notes="Planned alias for Moonshot/Kimi via Amazon Bedrock in Story 4.3.",
-    ),
-    ModelCapabilities(
-        provider="llama",
-        family="Llama",
-        runtimes=("planned",),
-        enabled=False,
-        supports_converse=False,
-        supports_tools=False,
-        supports_guardrails=False,
-        supports_streaming=False,
-        bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
-        notes="Planned via Amazon Bedrock in Story 4.3.",
+        region_constraint="Unknown until a future rollout story validates Bedrock model ID and region; alias for Moonshot/Kimi.",
+        notes="Planned alias for Moonshot/Kimi via Amazon Bedrock in a future Epic 4 story.",
     ),
     ModelCapabilities(
         provider="qwen",
@@ -119,8 +124,8 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         supports_guardrails=False,
         supports_streaming=False,
         bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
-        notes="Planned via Amazon Bedrock in Story 4.3.",
+        region_constraint="Unknown until a future rollout story validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in a future Epic 4 story.",
     ),
     ModelCapabilities(
         provider="deepseek",
@@ -132,8 +137,8 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         supports_guardrails=False,
         supports_streaming=False,
         bedrock_first=True,
-        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
-        notes="Planned via Amazon Bedrock in Story 4.3.",
+        region_constraint="Unknown until a future rollout story validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in a future Epic 4 story.",
     ),
 )
 
@@ -199,20 +204,22 @@ def create_local_model_adapter(provider: str, env: Mapping[str, str]):
 
     Raises ValueError for unsupported providers — no silent fallback.
     Distinguishes planned-but-not-enabled families from completely unknown keys.
+    Registry-backed: any enabled Bedrock-first local provider uses BedrockAdapter.
     """
-    if provider == "bedrock":
-        return BedrockAdapter(env)
-    elif provider == "gemini":
+    # Gemini requires its own adapter (not Bedrock-backed)
+    if provider == "gemini":
         return GeminiAdapter(env)
-    else:
-        cap = _REGISTRY_BY_PROVIDER.get(provider)
-        if cap is not None and not cap.enabled:
+    cap = _REGISTRY_BY_PROVIDER.get(provider)
+    if cap is not None:
+        if not cap.enabled:
             raise ValueError(
                 f"MODEL_PROVIDER '{provider}' ({cap.family}) is a planned candidate "
                 f"and is not yet enabled for local runtime use. "
                 f"Supported local providers: {supported_local_providers()}."
             )
-        raise ValueError(
-            f"Unknown MODEL_PROVIDER: '{provider}'. "
-            f"Supported local providers: {supported_local_providers()}."
-        )
+        if cap.bedrock_first and "local" in cap.runtimes:
+            return BedrockAdapter(env)
+    raise ValueError(
+        f"Unknown MODEL_PROVIDER: '{provider}'. "
+        f"Supported local providers: {supported_local_providers()}."
+    )

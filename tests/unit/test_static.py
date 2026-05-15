@@ -116,7 +116,7 @@ class TestEnvExample:
         lines = self._lines()
         index = self._line_index("MODEL_PROVIDER=bedrock")
         assert lines[index - 1] == (
-            '# Provider: "bedrock" (Amazon Bedrock) or "gemini" (Google Gemini)'
+            '# Provider: "bedrock" (Amazon Bedrock), "gemini" (Google Gemini), or "llama" (Meta Llama via Bedrock)'
         )
 
     def test_model_id_comment_mentions_bedrock_and_gemini(self):
@@ -129,7 +129,7 @@ class TestEnvExample:
         """AC #2 (Story 4.1): planned model families must not read as enabled providers."""
         content = self._content()
         assert "Planned additions (not yet enabled)" in content
-        for family in ("Gemma", "Moonshot/Kimi", "Llama", "Qwen", "DeepSeek"):
+        for family in ("Gemma", "Moonshot/Kimi", "Qwen", "DeepSeek"):
             assert family in content
         assert "will fail explicitly" in content
         assert "local adapter selection raises ValueError" in content
@@ -325,13 +325,14 @@ class TestReadmeProviderRoadmap:
         assert "earlier work" in nist_section
 
     def test_model_expansion_roadmap_preserves_runtime_boundary(self):
-        """AC #2 (Story 4.1): README must distinguish supported and planned provider paths."""
+        """AC #2 (Story 4.1/4.3): README must distinguish supported and planned provider paths."""
         content = self._content()
         assert "### Model expansion roadmap" in content
         assert "`bedrock` (local + deployed), `gemini` (local only)" in content
+        assert "`llama` (local + deployed, Bedrock-backed)" in content
         assert "Planned" in content and "Gemma" in content and "DeepSeek" in content
         assert "Local adapter selection raises `ValueError`" in content
-        assert "deployment preflight rejects non-`bedrock` providers" in content
+        assert "deployment preflight rejects non-Bedrock-backed providers" in content
         assert "deployed runtime returns an unsupported-provider error" in content
 
 
@@ -343,18 +344,18 @@ class TestProjectContextProviderRules:
         return (PROJECT_ROOT / "_bmad-output" / "project-context.md").read_text()
 
     def test_provider_rules_distinguish_local_and_deployed_support(self):
-        """AC #2 (Story 4.1): project context must preserve local/cloud provider boundaries."""
+        """AC #2 (Story 4.1/4.3): project context must preserve local/cloud provider boundaries."""
         content = self._content()
-        assert "Local adapter code supports `bedrock` and `gemini`" in content
+        assert "Local adapter code supports `bedrock`, `gemini`, and `llama`" in content
         assert "all other local provider values raise `ValueError`" in content
-        assert "Deployed AgentCore code supports only `bedrock`" in content
+        assert "Deployed AgentCore code supports `bedrock` and `llama`" in content
         assert "unsupported-provider error before Bedrock invocation" in content
 
     def test_provider_rules_mark_expansion_targets_as_future_work(self):
-        """AC #1 (Story 4.1): project context must not imply planned families are enabled."""
+        """AC #1 (Story 4.1/4.3): project context must not imply still-planned families are enabled."""
         content = self._content()
         assert "future work, not currently configured providers" in content
-        for family in ("Gemma", "Moonshot/Kimi", "Llama", "Qwen", "DeepSeek"):
+        for family in ("Gemma", "Moonshot/Kimi", "Qwen", "DeepSeek"):
             assert family in content
 
     def test_local_adapter_registry_convention_is_documented(self):

@@ -22,6 +22,10 @@ DEFAULT_MODEL_ID = "us.amazon.nova-micro-v1:0"
 _US_INFERENCE_PROFILE_REGIONS = ("us-east-1", "us-east-2", "us-west-2")
 _RUNTIME_ROLE_STACK_NAME = "StrandsDemoAgentCoreRuntimeRoleStack"
 
+# Providers that are Bedrock-backed and permitted for AgentCore deployment.
+# "llama" routes through Bedrock Converse — no direct Meta API involved.
+_BEDROCK_BACKED_PROVIDERS = frozenset({"bedrock", "llama"})
+
 
 def _bedrock_model_resources(
     aws_region: str, account_id: str, model_id: str
@@ -290,16 +294,17 @@ def main() -> None:
         print("   Hint: Copy .env.example to .env and fill in all required values.")
         sys.exit(1)
 
-    if model_provider != "bedrock":
+    if model_provider not in _BEDROCK_BACKED_PROVIDERS:
         print(
             f"\n❌ Unsupported MODEL_PROVIDER for AgentCore deployment: '{model_provider}'"
         )
         print(
             "   The AgentCore deployed runtime (deploy/app.py) uses Bedrock Converse"
-            " directly and only supports MODEL_PROVIDER=bedrock."
+            " directly and only supports Bedrock-backed providers: bedrock, llama."
         )
-        print("   Multi-provider AgentCore support is planned for Epic 4.")
-        print("   Set MODEL_PROVIDER=bedrock in your .env before deploying.")
+        print(
+            "   Set MODEL_PROVIDER=bedrock or MODEL_PROVIDER=llama in your .env before deploying."
+        )
         sys.exit(1)
 
     # AgentCore runtime names must match [a-zA-Z][a-zA-Z0-9_]{0,47} — hyphens not allowed
@@ -363,9 +368,9 @@ def main() -> None:
         "OTEL_TRACES_EXPORTER": "otlp",
         "AWS_REGION": aws_region,
     }
-    # GOOGLE_API_KEY passthrough is preserved for completeness, but the provider check
-    # above ensures MODEL_PROVIDER=bedrock before reaching this point. The deployed
-    # runtime (deploy/app.py) only supports Bedrock Converse — Gemini is local-only.
+    # GOOGLE_API_KEY passthrough is preserved for completeness but is not used by the
+    # deployed runtime. The provider check above ensures only Bedrock-backed providers
+    # (bedrock, llama) reach this point — Gemini is local-only.
     google_api_key = os.environ.get("GOOGLE_API_KEY")
     if google_api_key:
         env_vars["GOOGLE_API_KEY"] = google_api_key

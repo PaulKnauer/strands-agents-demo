@@ -400,7 +400,7 @@ GOOGLE_API_KEY=your-key-here
 # Also: pip install strands-agents[gemini]
 ```
 
-> **Note:** Provider switching applies to `agent.py` (local development) only. The AgentCore deployed runtime (`deploy/app.py`) uses Bedrock Converse directly and only supports `MODEL_PROVIDER=bedrock`.
+> **Note:** Provider switching applies to `agent.py` (local development). The AgentCore deployed runtime (`deploy/app.py`) uses Bedrock Converse directly and supports only Bedrock-backed providers: `MODEL_PROVIDER=bedrock` and `MODEL_PROVIDER=llama`.
 
 ### Model expansion roadmap
 
@@ -408,11 +408,13 @@ Epic 4 adds Bedrock-first staged support for additional model families. The tabl
 
 | Stage | Providers / families | Status |
 |-------|---------------------|--------|
-| Supported today | `bedrock` (local + deployed), `gemini` (local only) | ✅ |
-| Planned — Bedrock-first | Gemma, Moonshot/Kimi, Llama, Qwen, DeepSeek via Amazon Bedrock | 🔜 Epic 4.2–4.3 |
+| Supported today | `bedrock` (local + deployed), `gemini` (local only), `llama` (local + deployed, Bedrock-backed) | ✅ |
+| Planned — Bedrock-first | Gemma, Moonshot/Kimi, Qwen, DeepSeek via Amazon Bedrock | 🔜 Epic 4.4 |
 | Optional / evaluated later | Direct-provider or LiteLLM paths outside Bedrock | 🔭 Epic 4.4 |
 
-Setting `MODEL_PROVIDER` to a planned family name today (e.g. `gemma`, `llama`, `qwen`) will fail explicitly because those paths are not yet implemented. Local adapter selection raises `ValueError`; AgentCore deployment preflight rejects non-`bedrock` providers; and an already-running deployed runtime returns an unsupported-provider error before invoking Bedrock. Bedrock model IDs and region availability for each planned family will be documented in the Epic 4.3 rollout story.
+Setting `MODEL_PROVIDER` to a planned family name today (e.g. `gemma`, `qwen`) will fail explicitly because those paths are not yet implemented. Local adapter selection raises `ValueError`; AgentCore deployment preflight rejects non-Bedrock-backed providers; and an already-running deployed runtime returns an unsupported-provider error before invoking Bedrock.
+
+`MODEL_PROVIDER=llama` is Bedrock-backed — it routes through Amazon Bedrock Converse, not a direct Meta API. The concrete supported model is `us.meta.llama3-1-70b-instruct-v1:0` (Meta Llama 3.1 70B Instruct) for `us-east-1` deployments. Llama model access must be granted in your Bedrock account (Console → Amazon Bedrock → Model access) before using this path.
 
 ---
 

@@ -169,14 +169,14 @@ class TestCapabilityRegistry:
         from model_adapters import supported_local_providers
 
         providers = supported_local_providers()
-        for family in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+        for family in ("gemma", "moonshot", "kimi", "qwen", "deepseek"):
             assert family not in providers
 
     def test_planned_model_families_includes_all_candidate_provider_keys(self):
         from model_adapters import planned_model_families
 
         provider_keys = planned_model_families()
-        for expected in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+        for expected in ("gemma", "moonshot", "kimi", "qwen", "deepseek"):
             assert expected in provider_keys
 
     def test_get_model_capabilities_bedrock_is_enabled(self):
@@ -233,7 +233,7 @@ class TestCapabilityRegistry:
     def test_get_model_capabilities_planned_families_not_enabled(self):
         from model_adapters import get_model_capabilities
 
-        for provider in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+        for provider in ("gemma", "moonshot", "kimi", "qwen", "deepseek"):
             cap = get_model_capabilities(provider)
             assert (
                 cap is not None
@@ -245,7 +245,7 @@ class TestCapabilityRegistry:
     def test_get_model_capabilities_planned_families_bedrock_first(self):
         from model_adapters import get_model_capabilities
 
-        for provider in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+        for provider in ("gemma", "moonshot", "kimi", "qwen", "deepseek"):
             cap = get_model_capabilities(provider)
             assert cap.runtimes == ("planned",)
             assert cap.supports_converse is False
@@ -277,6 +277,89 @@ class TestCapabilityRegistry:
         assert "alias" in kimi_cap.notes.lower()
 
 
+class TestLlamaAdapter:
+    """Llama is an enabled Bedrock-first family alias after Story 4.3 rollout."""
+
+    _env = {
+        "MODEL_ID": "us.meta.llama3-1-70b-instruct-v1:0",
+        "AWS_REGION": "us-east-1",
+    }
+
+    def test_llama_is_enabled_in_registry(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("llama")
+        assert cap is not None
+        assert cap.enabled is True
+
+    def test_llama_runtimes_include_local_and_deployed(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("llama")
+        assert "local" in cap.runtimes
+        assert "deployed" in cap.runtimes
+
+    def test_llama_capability_metadata(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("llama")
+        assert cap.supports_converse is True
+        assert cap.supports_tools is True
+        assert cap.supports_guardrails is True
+        assert cap.bedrock_first is True
+
+    def test_llama_in_supported_local_providers(self):
+        from model_adapters import supported_local_providers
+
+        assert "llama" in supported_local_providers()
+
+    def test_llama_not_in_planned_model_families(self):
+        from model_adapters import planned_model_families
+
+        assert "llama" not in planned_model_families()
+
+    def test_llama_local_adapter_returns_bedrock_adapter(self):
+        from model_adapters import create_local_model_adapter, BedrockAdapter
+
+        adapter = create_local_model_adapter("llama", self._env)
+        assert isinstance(adapter, BedrockAdapter)
+
+    def test_llama_adapter_uses_model_id_from_env(self):
+        from model_adapters import create_local_model_adapter
+
+        with patch("model_adapters.BedrockModel") as mock_cls:
+            adapter = create_local_model_adapter("llama", self._env)
+            adapter.build()
+            kwargs = mock_cls.call_args.kwargs
+            assert kwargs["model_id"] == "us.meta.llama3-1-70b-instruct-v1:0"
+            assert kwargs["region_name"] == "us-east-1"
+
+    def test_llama_adapter_wires_guardrails_when_set(self):
+        from model_adapters import create_local_model_adapter
+
+        env = {**self._env, "GUARDRAIL_ID": "gr-llama", "GUARDRAIL_VERSION": "1"}
+        with patch("model_adapters.BedrockModel") as mock_cls:
+            adapter = create_local_model_adapter("llama", env)
+            adapter.build()
+            kwargs = mock_cls.call_args.kwargs
+            assert kwargs["guardrail_id"] == "gr-llama"
+            assert kwargs["guardrail_version"] == "1"
+
+    def test_llama_notes_document_bedrock_model_ids(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("llama")
+        # Notes must make clear this is Bedrock-backed, not a direct Meta API
+        assert "Bedrock" in cap.notes or "bedrock" in cap.notes.lower()
+        assert "Meta" in cap.notes
+
+    def test_llama_region_constraint_documents_geo_inference_id(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("llama")
+        assert "us.meta.llama3-1-70b-instruct-v1:0" in cap.region_constraint
+
+
 class TestPlannedFamilyProviderRejection:
     """Planned family labels must fail clearly when used as MODEL_PROVIDER."""
 
@@ -299,12 +382,6 @@ class TestPlannedFamilyProviderRejection:
 
         with pytest.raises(ValueError, match="planned candidate"):
             create_local_model_adapter("kimi", self._env)
-
-    def test_llama_raises_value_error(self):
-        from model_adapters import create_local_model_adapter
-
-        with pytest.raises(ValueError, match="planned candidate"):
-            create_local_model_adapter("llama", self._env)
 
     def test_qwen_raises_value_error(self):
         from model_adapters import create_local_model_adapter
@@ -331,6 +408,6 @@ class TestPlannedFamilyProviderRejection:
         from model_adapters import create_local_model_adapter
 
         with pytest.raises(ValueError) as exc_info:
-            create_local_model_adapter("llama", self._env)
+            create_local_model_adapter("gemma", self._env)
         error_msg = str(exc_info.value)
         assert "planned" in error_msg.lower() or "not yet enabled" in error_msg.lower()

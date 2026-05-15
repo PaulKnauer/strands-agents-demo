@@ -332,3 +332,61 @@ class TestHandleInvocation:
         assert result.startswith("Error:")
         assert "openai" in result
         mock_client.assert_not_called()
+
+
+class TestHandleInvocationLlama:
+    """llama is a Bedrock-backed provider accepted by the deployed runtime (Story 4.3)."""
+
+    @patch("deploy.app.boto3.client")
+    def test_llama_provider_accepted(self, mock_client):
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
+
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "llama"}):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+
+        assert not result.startswith("Error:")
+        mock_client.assert_called_once()
+
+    @patch("deploy.app.boto3.client")
+    def test_llama_provider_uses_bedrock_converse(self, mock_client):
+        """llama still calls Bedrock Converse — not a direct Meta API."""
+        mock_bedrock = MagicMock()
+        mock_client.return_value = mock_bedrock
+        mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
+
+        with patch.dict(
+            os.environ,
+            {
+                "MODEL_PROVIDER": "llama",
+                "MODEL_ID": "us.meta.llama3-1-70b-instruct-v1:0",
+            },
+        ):
+            handle_invocation({"prompt": "born 1 Jan 2020"})
+
+        mock_client.assert_called_once_with(
+            "bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1")
+        )
+        assert mock_bedrock.converse.call_count == 1
+
+    @patch("deploy.app.boto3.client")
+    def test_gemini_still_rejected_by_deployed_runtime(self, mock_client):
+        """gemini is local-only — deployed runtime must reject it without a Bedrock call."""
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "gemini"}):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+        assert result.startswith("Error:")
+        assert "gemini" in result
+        mock_client.assert_not_called()
+
+    @patch("deploy.app.boto3.client")
+    def test_non_bedrock_backed_provider_returns_error(self, mock_client):
+        """Providers not in _DEPLOYED_BEDROCK_PROVIDERS must be rejected without a Bedrock call."""
+        for bad_provider in ("qwen", "deepseek", "openai"):
+            mock_client.reset_mock()
+            with patch.dict(os.environ, {"MODEL_PROVIDER": bad_provider}):
+                result = handle_invocation({"prompt": "born 1 Jan 2020"})
+            assert result.startswith(
+                "Error:"
+            ), f"Expected error for provider={bad_provider}"
+            mock_client.assert_not_called()

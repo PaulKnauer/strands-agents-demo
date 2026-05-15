@@ -59,9 +59,10 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Provider And Model Rules
 
 - Current provider abstraction is explicit: `MODEL_PROVIDER` plus `MODEL_ID`.
-- Local adapter code supports `bedrock` and `gemini`; all other local provider values raise `ValueError` today.
-- Deployed AgentCore code supports only `bedrock`; other deployed provider values return an explicit unsupported-provider error before Bedrock invocation.
-- Epic 4 staged expansion targets Gemma, Moonshot/Kimi, Llama, Qwen, and DeepSeek through Amazon Bedrock (Stories 4.2–4.3); these are future work, not currently configured providers. Optional direct-provider or LiteLLM paths outside Bedrock are evaluated later (Story 4.4).
+- Local adapter code supports `bedrock`, `gemini`, and `llama` (Bedrock-backed); all other local provider values raise `ValueError`.
+- Deployed AgentCore code supports `bedrock` and `llama` (both Bedrock-backed via Converse); other deployed provider values return an explicit unsupported-provider error before Bedrock invocation.
+- `llama` is a Bedrock-backed family alias (Meta Llama 3.1 70B Instruct via Amazon Bedrock); it is not a direct Meta API integration. Enabled as of Story 4.3.
+- Epic 4 staged expansion targets Gemma, Moonshot/Kimi, Qwen, and DeepSeek through Amazon Bedrock (Story 4.4+); these are future work, not currently configured providers. Optional direct-provider or LiteLLM paths outside Bedrock are evaluated later (Story 4.4).
 - Adding any new provider requires extending the abstraction, tests, docs, and deployment assumptions together — never a one-file edit.
 - Do not assume a model change is local-only. Bedrock/AgentCore deployment, IAM scopes, `.env.example`, README, and tests are coupled to provider choices.
 - Bedrock guardrails are optional and must only be wired when `GUARDRAIL_ID` is set.
@@ -74,7 +75,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - `planned_model_families()` returns provider keys that are planned but not yet enabled.
 - `get_model_capabilities(provider)` returns the `ModelCapabilities` entry or `None` for unknown keys.
 - Planned family metadata (`enabled=False`) must not imply runnable provider support; `create_local_model_adapter()` raises `ValueError` with "planned candidate" language for these entries.
-- The deployed runtime (`deploy/app.py`) must not import or use the local registry; it remains Bedrock-only via its own provider check.
+- The deployed runtime (`deploy/app.py`) must not import or use the local registry; it uses its own explicit provider check for Bedrock-backed providers (`bedrock` and `llama`).
 
 ### Testing Rules
 
@@ -125,4 +126,4 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Update it when provider support, deployment model, or testing contracts change.
 - Remove rules that become obsolete after the multi-provider refactor lands.
 
-Last Updated: 2026-05-14
+Last Updated: 2026-05-15

@@ -32,6 +32,10 @@ MAX_TURNS = 10  # prevent runaway tool-calling loops
 MAX_PROMPT_CHARS = 4000  # guard against token-cost amplification attacks
 DEFAULT_MODEL_ID = "us.amazon.nova-micro-v1:0"
 
+# Providers permitted by the deployed runtime — all route through Bedrock Converse.
+# "llama" is a Bedrock-backed family alias, not a direct Meta API integration.
+_DEPLOYED_BEDROCK_PROVIDERS = frozenset({"bedrock", "llama"})
+
 # Identical system prompt to agent.py — same agent behaviour in cloud as locally.
 SYSTEM_PROMPT = """You are a helpful assistant that calculates a person's age in days.
 When given a date of birth, you MUST call the get_today_date tool to retrieve today's
@@ -282,11 +286,11 @@ def handle_invocation(payload: dict) -> str:
                 "agent.payload_keys", ",".join(sorted(payload.keys()))
             )
         if not model_provider:
-            return "Error: MODEL_PROVIDER is required by the deployed runtime. Set MODEL_PROVIDER=bedrock."
-        if model_provider != "bedrock":
+            return "Error: MODEL_PROVIDER is required by the deployed runtime. Set MODEL_PROVIDER=bedrock or MODEL_PROVIDER=llama."
+        if model_provider not in _DEPLOYED_BEDROCK_PROVIDERS:
             return (
                 f"Error: MODEL_PROVIDER='{model_provider}' is not supported by the deployed"
-                " runtime. Only 'bedrock' is supported."
+                " runtime. Only Bedrock-backed providers are supported: bedrock, llama."
             )
         prompt = payload.get("prompt", "")
         if not prompt.strip():
