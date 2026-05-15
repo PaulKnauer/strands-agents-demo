@@ -59,11 +59,12 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Provider And Model Rules
 
 - Current provider abstraction is explicit: `MODEL_PROVIDER` plus `MODEL_ID`.
-- Local adapter code supports `bedrock`, `gemini`, and `llama` (Bedrock-backed); all other local provider values raise `ValueError`.
+- Local adapter code supports `bedrock`, `gemini`, `llama`, and `litellm` (exploratory local-only evaluation boundary); all other local provider values raise `ValueError`.
 - Deployed AgentCore code supports `bedrock` and `llama` (both Bedrock-backed via Converse); other deployed provider values return an explicit unsupported-provider error before Bedrock invocation.
 - `llama` is a Bedrock-backed family alias (Meta Llama 3.1 70B Instruct via Amazon Bedrock); it is not a direct Meta API integration. Enabled as of Story 4.3.
-- Epic 4 staged expansion targets Gemma, Moonshot/Kimi, Qwen, and DeepSeek through Amazon Bedrock (Story 4.4+); these are future work, not currently configured providers. Optional direct-provider or LiteLLM paths outside Bedrock are evaluated later (Story 4.4).
-- Adding any new provider requires extending the abstraction, tests, docs, and deployment assumptions together — never a one-file edit.
+- `litellm` is an exploratory local-only evaluation boundary (Story 4.4). It is not deployable through AgentCore. It requires `pip install 'strands-agents[litellm]'` and provider-specific credentials. Do not treat it as a production-aligned default or as parity with the Bedrock-first path.
+- Future post-Story-4.5 expansion targets Gemma, Moonshot/Kimi, Qwen, and DeepSeek through Amazon Bedrock; these are future work, not currently configured providers.
+- Adding any new provider requires extending the abstraction, tests, docs, deployment assumptions, and verification strategy together — never a one-file edit. Specifically: update `model_adapters.py` registry, `README.md` support matrix and verification table, `.env.example` provider labels, deployed runtime provider check, IAM/model ARN handling, and the relevant unit + static tests in a single coordinated change.
 - Do not assume a model change is local-only. Bedrock/AgentCore deployment, IAM scopes, `.env.example`, README, and tests are coupled to provider choices.
 - Bedrock guardrails are optional and must only be wired when `GUARDRAIL_ID` is set.
 - If provider support differs between local and deployed runtimes, document that boundary explicitly rather than hiding it behind silent fallbacks.

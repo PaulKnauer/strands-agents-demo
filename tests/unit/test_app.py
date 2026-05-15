@@ -382,7 +382,7 @@ class TestHandleInvocationLlama:
     @patch("deploy.app.boto3.client")
     def test_non_bedrock_backed_provider_returns_error(self, mock_client):
         """Providers not in _DEPLOYED_BEDROCK_PROVIDERS must be rejected without a Bedrock call."""
-        for bad_provider in ("qwen", "deepseek", "openai"):
+        for bad_provider in ("qwen", "deepseek", "openai", "litellm"):
             mock_client.reset_mock()
             with patch.dict(os.environ, {"MODEL_PROVIDER": bad_provider}):
                 result = handle_invocation({"prompt": "born 1 Jan 2020"})
@@ -390,3 +390,22 @@ class TestHandleInvocationLlama:
                 "Error:"
             ), f"Expected error for provider={bad_provider}"
             mock_client.assert_not_called()
+
+
+class TestHandleInvocationLiteLLM:
+    """litellm is local-only — the deployed runtime must reject it (Story 4.4)."""
+
+    @patch("deploy.app.boto3.client")
+    def test_litellm_provider_rejected_by_deployed_runtime(self, mock_client):
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "litellm"}):
+            result = handle_invocation({"prompt": "born 1 Jan 2020"})
+        assert result.startswith("Error:")
+        assert "litellm" in result
+        mock_client.assert_not_called()
+
+    @patch("deploy.app.boto3.client")
+    def test_litellm_rejection_occurs_before_bedrock_call(self, mock_client):
+        """litellm rejection must fire before any boto3 client is created."""
+        with patch.dict(os.environ, {"MODEL_PROVIDER": "litellm"}):
+            handle_invocation({"prompt": "born 1 Jan 2020"})
+        mock_client.assert_not_called()

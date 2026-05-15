@@ -323,6 +323,25 @@ class TestMainEnvValidation:
             or "bedrock" in out.lower()
         )
 
+    @patch("deploy.deploy.boto3.client")
+    def test_litellm_model_provider_exits_before_deployment_attempt(
+        self, mock_client, capsys
+    ):
+        """AC #2 (Story 4.4): litellm must fail deployment preflight before AWS calls."""
+        code = self._run_main_no_env(
+            {
+                "AWS_REGION": "us-east-1",
+                "AGENT_NAME": "test-agent",
+                "MODEL_ID": "moonshot/moonshot-v1-8k",
+                "MODEL_PROVIDER": "litellm",
+            }
+        )
+        assert code == 1
+        out = capsys.readouterr().out
+        assert "litellm" in out.lower()
+        assert "bedrock" in out.lower()
+        mock_client.assert_not_called()
+
 
 # ── main() — idempotency (create vs update) ───────────────────────────────────
 

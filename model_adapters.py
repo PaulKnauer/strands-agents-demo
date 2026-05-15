@@ -7,6 +7,7 @@ via boto3 and must not import from here.
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
+from urllib.parse import urlparse
 
 from strands.models import BedrockModel
 
@@ -55,6 +56,22 @@ _REGISTRY: tuple[ModelCapabilities, ...] = (
         bedrock_first=False,
         region_constraint="Not region-scoped by AWS_REGION; local-only Google API path.",
         notes="Local only via strands-agents[gemini] optional dependency.",
+    ),
+    # Exploratory local-only evaluation boundary — Story 4.4.
+    # Not deployable through AgentCore. Uses strands-agents[litellm] optional dependency.
+    # One concrete example: Kimi via https://api.moonshot.ai/v1 with MOONSHOT_API_KEY bearer auth.
+    ModelCapabilities(
+        provider="litellm",
+        family="LiteLLM (direct-provider evaluation)",
+        runtimes=("local",),
+        enabled=True,
+        supports_converse=False,
+        supports_tools=True,
+        supports_guardrails=False,
+        supports_streaming=True,
+        bedrock_first=False,
+        region_constraint="Not region-scoped by AWS_REGION; local-only direct-provider evaluation path.",
+        notes="Exploratory local-only evaluation boundary (Story 4.4). Install via pip install 'strands-agents[litellm]'. Example: Kimi via https://api.moonshot.ai/v1. Not deployable through AgentCore.",
     ),
     # Enabled Bedrock-first family alias — Meta Llama 3.1 70B Instruct via Amazon Bedrock.
     # Concrete Bedrock model IDs (US region deployment default):
@@ -199,6 +216,44 @@ class GeminiAdapter:
         return GeminiModel(model_id=self._model_id)
 
 
+class LiteLLMAdapter:
+    def __init__(self, env: Mapping[str, str]):
+        self._model_id = env["MODEL_ID"]
+        if (
+            self._model_id.startswith("moonshot/")
+            and not env.get("MOONSHOT_API_KEY", "").strip()
+        ):
+            raise ValueError(
+                "MODEL_PROVIDER=litellm with a moonshot/* MODEL_ID requires "
+                "MOONSHOT_API_KEY. Set MOONSHOT_API_KEY for the documented "
+                "Kimi evaluation path."
+            )
+        api_base = env.get("LITELLM_API_BASE", "").strip()
+        if api_base:
+            parsed = urlparse(api_base)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError(
+                    "LITELLM_API_BASE must be an absolute http(s) URL, "
+                    "for example https://api.moonshot.ai/v1."
+                )
+        self._client_args = {"api_base": api_base} if api_base else {}
+
+    def build(self):
+        # Lazy import — strands-agents[litellm] is optional; absent dependency must surface
+        try:
+            from strands.models.litellm import LiteLLMModel
+        except ImportError as exc:
+            raise ImportError(
+                "LiteLLM support requires the optional dependency: "
+                "pip install 'strands-agents[litellm]'."
+            ) from exc
+
+        return LiteLLMModel(
+            client_args=self._client_args or None,
+            model_id=self._model_id,
+        )
+
+
 def create_local_model_adapter(provider: str, env: Mapping[str, str]):
     """Return the appropriate local model adapter for the given provider.
 
@@ -206,20 +261,32 @@ def create_local_model_adapter(provider: str, env: Mapping[str, str]):
     Distinguishes planned-but-not-enabled families from completely unknown keys.
     Registry-backed: any enabled Bedrock-first local provider uses BedrockAdapter.
     """
-    # Gemini requires its own adapter (not Bedrock-backed)
+    cap = _REGISTRY_BY_PROVIDER.get(provider)
+    if cap is None:
+        raise ValueError(
+            f"Unknown MODEL_PROVIDER: '{provider}'. "
+            f"Supported local providers: {supported_local_providers()}."
+        )
+    if not cap.enabled:
+        raise ValueError(
+            f"MODEL_PROVIDER '{provider}' ({cap.family}) is a planned candidate "
+            f"and is not yet enabled for local runtime use. "
+            f"Supported local providers: {supported_local_providers()}."
+        )
+    if "local" not in cap.runtimes:
+        raise ValueError(
+            f"MODEL_PROVIDER '{provider}' is not enabled for local runtime use. "
+            f"Supported local providers: {supported_local_providers()}."
+        )
+    # Non-Bedrock local adapters — each requires its own class
     if provider == "gemini":
         return GeminiAdapter(env)
-    cap = _REGISTRY_BY_PROVIDER.get(provider)
-    if cap is not None:
-        if not cap.enabled:
-            raise ValueError(
-                f"MODEL_PROVIDER '{provider}' ({cap.family}) is a planned candidate "
-                f"and is not yet enabled for local runtime use. "
-                f"Supported local providers: {supported_local_providers()}."
-            )
-        if cap.bedrock_first and "local" in cap.runtimes:
-            return BedrockAdapter(env)
+    # LiteLLM is an exploratory local-only evaluation boundary (Story 4.4)
+    if provider == "litellm":
+        return LiteLLMAdapter(env)
+    if cap.bedrock_first:
+        return BedrockAdapter(env)
     raise ValueError(
-        f"Unknown MODEL_PROVIDER: '{provider}'. "
+        f"MODEL_PROVIDER '{provider}' has no local adapter implementation. "
         f"Supported local providers: {supported_local_providers()}."
     )

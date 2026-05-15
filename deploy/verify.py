@@ -415,7 +415,8 @@ def main() -> None:
         print(f"  Got: {result}")
         print(
             "  If the response indicates a model or provider error, check:"
-            " MODEL_PROVIDER=bedrock (only 'bedrock' is supported in the deployed runtime),"
+            " MODEL_PROVIDER=bedrock or MODEL_PROVIDER=llama"
+            " (only Bedrock-backed providers are supported in the deployed runtime),"
             " MODEL_ID, and Bedrock model access in your region."
         )
         passed = False

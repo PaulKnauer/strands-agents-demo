@@ -4,7 +4,7 @@ A minimal, forkable reference implementation of an AI agent built with the [Stra
 
 This project also ships a complete **NIST AI RMF compliance layer** — governance documentation, audit logging, Bedrock Guardrails, automated red-team CI, and a CloudWatch compliance dashboard. See [NIST AI RMF Compliance](#nist-ai-rmf-compliance) below.
 
-The current development sprint (Epic 4) adds **multi-provider model expansion** — Bedrock-first staged support for additional model families. See [Model expansion roadmap](#model-expansion-roadmap) below.
+Epic 4 added **multi-provider model expansion** — Bedrock-first staged support for additional model families. See [Model expansion roadmap](#model-expansion-roadmap) below.
 
 ## What This Demonstrates
 
@@ -408,13 +408,34 @@ Epic 4 adds Bedrock-first staged support for additional model families. The tabl
 
 | Stage | Providers / families | Status |
 |-------|---------------------|--------|
-| Supported today | `bedrock` (local + deployed), `gemini` (local only), `llama` (local + deployed, Bedrock-backed) | ✅ |
-| Planned — Bedrock-first | Gemma, Moonshot/Kimi, Qwen, DeepSeek via Amazon Bedrock | 🔜 Epic 4.4 |
-| Optional / evaluated later | Direct-provider or LiteLLM paths outside Bedrock | 🔭 Epic 4.4 |
+| Production-aligned | `bedrock` (local + deployed), `llama` (local + deployed, Bedrock-backed) | ✅ |
+| Supported local-only | `gemini` (local only, Google API) | ✅ |
+| Exploratory local-only evaluation | `litellm` (direct-provider via LiteLLM, e.g. Kimi; **not deployable through AgentCore**) | 🔭 |
+| Planned — Bedrock-first | Gemma, Moonshot/Kimi, Qwen, DeepSeek via Amazon Bedrock | 🔜 Planned — not yet enabled |
 
 Setting `MODEL_PROVIDER` to a planned family name today (e.g. `gemma`, `qwen`) will fail explicitly because those paths are not yet implemented. Local adapter selection raises `ValueError`; AgentCore deployment preflight rejects non-Bedrock-backed providers; and an already-running deployed runtime returns an unsupported-provider error before invoking Bedrock.
 
+The `litellm` path is an evaluation boundary, not a default alternative to Bedrock. It requires an optional dependency (`pip install 'strands-agents[litellm]'`), provider-specific credentials (e.g. `MOONSHOT_API_KEY`), and outbound network access to the chosen provider. AgentCore deployment in this repo remains Bedrock-backed only (`bedrock` or `llama`) even when the local `litellm` path is used.
+
 `MODEL_PROVIDER=llama` is Bedrock-backed — it routes through Amazon Bedrock Converse, not a direct Meta API. The concrete supported model is `us.meta.llama3-1-70b-instruct-v1:0` (Meta Llama 3.1 70B Instruct) for `us-east-1` deployments. Llama model access must be granted in your Bedrock account (Console → Amazon Bedrock → Model access) before using this path.
+
+#### Verification strategy
+
+Run the deterministic suite at any time — no live credentials needed:
+
+```bash
+venv/bin/python -m pytest tests/unit/test_model_adapters.py tests/unit/test_app.py tests/unit/test_deploy.py tests/unit/test_static.py
+```
+
+| Provider | Verification level | Notes |
+|----------|--------------------|-------|
+| `bedrock` | Unit + static verified; live smoke optional | Live smoke requires AWS credentials and `us.amazon.nova-micro-v1:0` Bedrock access |
+| `llama` | Unit + static verified; live smoke optional | Live smoke requires Bedrock access for `us.meta.llama3-1-70b-instruct-v1:0` |
+| `gemini` | Unit + static verified; live smoke optional | Live smoke requires `GOOGLE_API_KEY` and `pip install 'strands-agents[gemini]'` |
+| `litellm` | Unit + static verified only; live smoke explicitly not required in CI | Live smoke requires `pip install 'strands-agents[litellm]'`, provider credentials (e.g. `MOONSHOT_API_KEY`), and outbound network access |
+| `gemma`, `moonshot`, `qwen`, `deepseek` | Unit tests verify explicit rejection | Planned registry entries — not runnable provider keys |
+
+Deployed runtime verification (via `make verify`) applies only to `MODEL_PROVIDER=bedrock` and `MODEL_PROVIDER=llama`. All other provider values return an unsupported-provider error from the deployed runtime before Bedrock is invoked.
 
 ---
 
@@ -434,7 +455,7 @@ make teardown-redteam-role  # Destroy the GitHub Actions OIDC role stack
 make teardown-transaction-search  # Destroy the Transaction Search CDK stack
 make dashboard      # Create/update CloudWatch NIST-RMF compliance dashboard
 make redteam        # Run promptfoo adversarial red-team scan
-make test           # Run unit + eval tests (134 tests)
+make test           # Run unit + eval tests (326 tests)
 make test-unit      # Unit tests only
 make lint           # Check formatting with black (no changes made)
 make format         # Auto-format all Python files with black
@@ -489,7 +510,7 @@ Only check CloudWatch logs after the runtime has started or AgentCore links logs
 
 The verifier computes the expected age in days from DOB `1990-03-14` to today's UTC date at run time and checks that the response contains that exact value. Common causes:
 
-- `MODEL_PROVIDER` is not set to `bedrock` in `.env`. The AgentCore deployed runtime only supports `MODEL_PROVIDER=bedrock`; other values return an error response.
+- `MODEL_PROVIDER` is not set to a Bedrock-backed provider in `.env`. The AgentCore deployed runtime supports `MODEL_PROVIDER=bedrock` and `MODEL_PROVIDER=llama`; local-only values such as `gemini` or `litellm` return an error response.
 - `MODEL_ID` is incorrect or Bedrock model access has not been granted. See the **Model access error** entry below.
 - The runtime is deployed in a different region than `AWS_REGION` in `.env` — the invocation reaches the wrong endpoint.
 

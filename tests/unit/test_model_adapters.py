@@ -411,3 +411,182 @@ class TestPlannedFamilyProviderRejection:
             create_local_model_adapter("gemma", self._env)
         error_msg = str(exc_info.value)
         assert "planned" in error_msg.lower() or "not yet enabled" in error_msg.lower()
+
+
+class TestLiteLLMAdapter:
+    """LiteLLM is an exploratory local-only evaluation boundary (Story 4.4)."""
+
+    def test_litellm_is_enabled_in_registry(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        assert cap is not None
+        assert cap.enabled is True
+
+    def test_litellm_is_local_only(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        assert cap.runtimes == ("local",)
+        assert "deployed" not in cap.runtimes
+
+    def test_litellm_is_not_bedrock_first(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        assert cap.bedrock_first is False
+
+    def test_litellm_does_not_support_converse(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        assert cap.supports_converse is False
+
+    def test_litellm_does_not_support_guardrails(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        assert cap.supports_guardrails is False
+
+    def test_litellm_in_supported_local_providers(self):
+        from model_adapters import supported_local_providers
+
+        assert "litellm" in supported_local_providers()
+
+    def test_litellm_not_in_planned_model_families(self):
+        from model_adapters import planned_model_families
+
+        assert "litellm" not in planned_model_families()
+
+    def test_litellm_notes_mark_as_exploratory(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("litellm")
+        notes_lower = cap.notes.lower()
+        assert "exploratory" in notes_lower or "evaluation" in notes_lower
+
+    def test_litellm_local_adapter_returns_litellm_adapter(self):
+        from model_adapters import create_local_model_adapter, LiteLLMAdapter
+
+        adapter = create_local_model_adapter(
+            "litellm",
+            {
+                "MODEL_ID": "moonshot/moonshot-v1-8k",
+                "MOONSHOT_API_KEY": "test-key",
+            },
+        )
+        assert isinstance(adapter, LiteLLMAdapter)
+
+    def test_litellm_local_adapter_requires_moonshot_api_key_for_moonshot_models(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="MOONSHOT_API_KEY"):
+            create_local_model_adapter(
+                "litellm", {"MODEL_ID": "moonshot/moonshot-v1-8k"}
+            )
+
+    def test_litellm_adapter_build_constructs_model_with_model_id(self):
+        from model_adapters import LiteLLMAdapter
+
+        mock_litellm_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"strands.models.litellm": MagicMock(LiteLLMModel=mock_litellm_cls)},
+        ):
+            LiteLLMAdapter(
+                {
+                    "MODEL_ID": "moonshot/moonshot-v1-8k",
+                    "MOONSHOT_API_KEY": "test-key",
+                }
+            ).build()
+            mock_litellm_cls.assert_called_once()
+            assert (
+                mock_litellm_cls.call_args.kwargs.get("model_id")
+                == "moonshot/moonshot-v1-8k"
+            )
+
+    def test_litellm_adapter_passes_api_base_client_arg(self):
+        from model_adapters import LiteLLMAdapter
+
+        mock_litellm_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"strands.models.litellm": MagicMock(LiteLLMModel=mock_litellm_cls)},
+        ):
+            LiteLLMAdapter(
+                {
+                    "MODEL_ID": "moonshot/moonshot-v1-8k",
+                    "MOONSHOT_API_KEY": "test-key",
+                    "LITELLM_API_BASE": " https://api.moonshot.ai/v1 ",
+                }
+            ).build()
+        assert mock_litellm_cls.call_args.kwargs["client_args"] == {
+            "api_base": "https://api.moonshot.ai/v1"
+        }
+
+    def test_litellm_adapter_omits_client_args_without_api_base(self):
+        from model_adapters import LiteLLMAdapter
+
+        mock_litellm_cls = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"strands.models.litellm": MagicMock(LiteLLMModel=mock_litellm_cls)},
+        ):
+            LiteLLMAdapter(
+                {
+                    "MODEL_ID": "moonshot/moonshot-v1-8k",
+                    "MOONSHOT_API_KEY": "test-key",
+                    "LITELLM_API_BASE": " ",
+                }
+            ).build()
+        assert mock_litellm_cls.call_args.kwargs["client_args"] is None
+
+    def test_litellm_adapter_rejects_malformed_api_base(self):
+        from model_adapters import LiteLLMAdapter
+
+        with pytest.raises(ValueError, match="LITELLM_API_BASE"):
+            LiteLLMAdapter(
+                {
+                    "MODEL_ID": "moonshot/moonshot-v1-8k",
+                    "MOONSHOT_API_KEY": "test-key",
+                    "LITELLM_API_BASE": "api.moonshot.ai/v1",
+                }
+            )
+
+    def test_litellm_adapter_import_failure_surfaces_clearly(self):
+        """If strands-agents[litellm] is missing, error guidance must be actionable."""
+        from model_adapters import LiteLLMAdapter
+
+        with patch.dict("sys.modules", {"strands.models.litellm": None}):
+            with pytest.raises(ImportError, match=r"strands-agents\[litellm\]"):
+                LiteLLMAdapter(
+                    {
+                        "MODEL_ID": "moonshot/moonshot-v1-8k",
+                        "MOONSHOT_API_KEY": "test-key",
+                    }
+                ).build()
+
+    def test_litellm_adapter_missing_model_id_raises_key_error(self):
+        from model_adapters import LiteLLMAdapter
+
+        with pytest.raises(KeyError):
+            LiteLLMAdapter({})
+
+    def test_litellm_factory_respects_registry_disabled_state(self):
+        import model_adapters
+        from model_adapters import create_local_model_adapter
+
+        disabled = dataclasses.replace(
+            model_adapters.get_model_capabilities("litellm"), enabled=False
+        )
+        registry = {cap.provider: cap for cap in model_adapters._REGISTRY}
+        registry["litellm"] = disabled
+        with patch.object(model_adapters, "_REGISTRY_BY_PROVIDER", registry):
+            with pytest.raises(ValueError, match="planned candidate|not yet enabled"):
+                create_local_model_adapter(
+                    "litellm",
+                    {
+                        "MODEL_ID": "moonshot/moonshot-v1-8k",
+                        "MOONSHOT_API_KEY": "test-key",
+                    },
+                )

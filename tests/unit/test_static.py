@@ -115,9 +115,11 @@ class TestEnvExample:
         """AC #3 (Story 1.1): MODEL_PROVIDER comment must document provider choices."""
         lines = self._lines()
         index = self._line_index("MODEL_PROVIDER=bedrock")
-        assert lines[index - 1] == (
-            '# Provider: "bedrock" (Amazon Bedrock), "gemini" (Google Gemini), or "llama" (Meta Llama via Bedrock)'
-        )
+        provider_comment = "\n".join(lines[index - 2 : index])
+        assert '"bedrock" (Amazon Bedrock)' in provider_comment
+        assert '"llama" (Meta Llama via Bedrock)' in provider_comment
+        assert '"gemini" (local-only Google Gemini)' in provider_comment
+        assert '"litellm" (local-only exploratory direct-provider evaluation)' in provider_comment
 
     def test_model_id_comment_mentions_bedrock_and_gemini(self):
         """AC #3 (Story 1.1): MODEL_ID comment must cover both local model paths."""
@@ -325,10 +327,11 @@ class TestReadmeProviderRoadmap:
         assert "earlier work" in nist_section
 
     def test_model_expansion_roadmap_preserves_runtime_boundary(self):
-        """AC #2 (Story 4.1/4.3): README must distinguish supported and planned provider paths."""
+        """AC #2 (Story 4.1/4.3/4.4): README must distinguish supported and planned provider paths."""
         content = self._content()
         assert "### Model expansion roadmap" in content
-        assert "`bedrock` (local + deployed), `gemini` (local only)" in content
+        assert "`bedrock` (local + deployed)" in content
+        assert "`gemini` (local only" in content
         assert "`llama` (local + deployed, Bedrock-backed)" in content
         assert "Planned" in content and "Gemma" in content and "DeepSeek" in content
         assert "Local adapter selection raises `ValueError`" in content
@@ -344,17 +347,25 @@ class TestProjectContextProviderRules:
         return (PROJECT_ROOT / "_bmad-output" / "project-context.md").read_text()
 
     def test_provider_rules_distinguish_local_and_deployed_support(self):
-        """AC #2 (Story 4.1/4.3): project context must preserve local/cloud provider boundaries."""
+        """AC #2 (Story 4.1/4.3/4.4): project context must preserve local/cloud provider boundaries."""
         content = self._content()
-        assert "Local adapter code supports `bedrock`, `gemini`, and `llama`" in content
+        assert "Local adapter code supports `bedrock`, `gemini`, `llama`, and `litellm`" in content
         assert "all other local provider values raise `ValueError`" in content
         assert "Deployed AgentCore code supports `bedrock` and `llama`" in content
         assert "unsupported-provider error before Bedrock invocation" in content
+
+    def test_litellm_documented_as_exploratory_local_only(self):
+        """AC #1 (Story 4.4): project context must mark litellm as exploratory and local-only."""
+        content = self._content()
+        rule = next(line for line in content.splitlines() if "`litellm` is" in line)
+        assert "exploratory local-only evaluation boundary" in rule
+        assert "not deployable through AgentCore" in rule
 
     def test_provider_rules_mark_expansion_targets_as_future_work(self):
         """AC #1 (Story 4.1/4.3): project context must not imply still-planned families are enabled."""
         content = self._content()
         assert "future work, not currently configured providers" in content
+        assert "Story 4.5+" not in content
         for family in ("Gemma", "Moonshot/Kimi", "Qwen", "DeepSeek"):
             assert family in content
 
@@ -368,3 +379,136 @@ class TestProjectContextProviderRules:
         assert "planned_model_families()" in content
         assert "get_model_capabilities(provider)" in content
         assert "must not import or use the local registry" in content
+
+
+# ── .env.example LiteLLM exploratory section (Story 4.4) ─────────────────────
+
+
+class TestEnvExampleLiteLLM:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / ".env.example").read_text()
+
+    def test_has_litellm_exploratory_section_header(self):
+        """AC #1 (Story 4.4): .env.example must have a distinct LiteLLM exploratory section."""
+        assert "# --- Optional: LiteLLM" in self._content()
+
+    def test_litellm_section_includes_model_provider_example(self):
+        """AC #1 (Story 4.4): .env.example must show MODEL_PROVIDER=litellm as an example."""
+        assert "MODEL_PROVIDER=litellm" in self._content()
+
+    def test_litellm_section_includes_moonshot_api_key_example(self):
+        """AC #1 (Story 4.4): .env.example must document a direct-provider credential example."""
+        assert "MOONSHOT_API_KEY" in self._content()
+
+    def test_litellm_section_includes_kimi_api_base_in_example(self):
+        """AC #1 (Story 4.4): Kimi example must include the Moonshot API base URL."""
+        content = self._content()
+        example = content.split("Example: Kimi (Moonshot)", 1)[1].split(
+            "For other OpenAI-compatible providers", 1
+        )[0]
+        assert "MODEL_PROVIDER=litellm" in example
+        assert "MODEL_ID=moonshot/moonshot-v1-8k" in example
+        assert "MOONSHOT_API_KEY" in example
+        assert "LITELLM_API_BASE=https://api.moonshot.ai/v1" in example
+
+    def test_litellm_section_marked_local_only(self):
+        """AC #2 (Story 4.4): LiteLLM section must be explicitly marked as local-only."""
+        content = self._content()
+        assert "local-only" in content or "local only" in content
+
+
+# ── README verification strategy (Story 4.5) ─────────────────────────────────
+
+
+class TestReadmeVerificationStrategy:
+    """AC #1 (Story 4.5): README must contain a per-path verification strategy."""
+
+    def _content(self) -> str:
+        return (PROJECT_ROOT / "README.md").read_text()
+
+    def _verification_section(self) -> str:
+        content = self._content()
+        assert "#### Verification strategy" in content, (
+            "README must contain a '#### Verification strategy' subsection"
+        )
+        return content.split("#### Verification strategy", 1)[1].split(
+            "## Make Targets", 1
+        )[0]
+
+    def test_readme_has_verification_strategy_heading(self):
+        """AC #1 (Story 4.5): README must have a verification strategy subsection."""
+        assert "#### Verification strategy" in self._content()
+
+    def test_verification_section_includes_pytest_command(self):
+        """AC #1 (Story 4.5): verification strategy must include the deterministic pytest command."""
+        section = self._verification_section()
+        assert "pytest tests/unit/test_model_adapters.py" in section
+        assert "test_app.py" in section
+        assert "test_deploy.py" in section
+        assert "test_static.py" in section
+
+    def test_verification_section_marks_litellm_not_required_in_ci(self):
+        """AC #1 (Story 4.5): litellm live smoke must be documented as not required in CI."""
+        section = self._verification_section()
+        assert "litellm" in section.lower()
+        assert "not required in CI" in section
+
+    def test_verification_section_scopes_deployed_to_bedrock_and_llama(self):
+        """AC #1 (Story 4.5): deployed verification must be explicitly scoped to bedrock and llama."""
+        section = self._verification_section()
+        assert "MODEL_PROVIDER=bedrock" in section
+        assert "MODEL_PROVIDER=llama" in section
+        assert "deployed" in section.lower()
+
+    def test_verification_section_locks_each_provider_row(self):
+        """AC #1 (Story 4.5): every provider row must keep its verification strategy."""
+        section = self._verification_section()
+        expected_rows = (
+            "| `bedrock` | Unit + static verified; live smoke optional | Live smoke requires AWS credentials and `us.amazon.nova-micro-v1:0` Bedrock access |",
+            "| `llama` | Unit + static verified; live smoke optional | Live smoke requires Bedrock access for `us.meta.llama3-1-70b-instruct-v1:0` |",
+            "| `gemini` | Unit + static verified; live smoke optional | Live smoke requires `GOOGLE_API_KEY` and `pip install 'strands-agents[gemini]'` |",
+            "| `litellm` | Unit + static verified only; live smoke explicitly not required in CI | Live smoke requires `pip install 'strands-agents[litellm]'`, provider credentials (e.g. `MOONSHOT_API_KEY`), and outbound network access |",
+            "| `gemma`, `moonshot`, `qwen`, `deepseek` | Unit tests verify explicit rejection | Planned registry entries — not runnable provider keys |",
+        )
+        for row in expected_rows:
+            assert row in section
+
+    def test_planned_row_does_not_claim_epic_4_5_delivery(self):
+        """AC #1 (Story 4.5): planned families must not imply Story 4.5 enables them."""
+        content = self._content()
+        roadmap = content.split("### Model expansion roadmap", 1)[1].split("---", 1)[0]
+        assert "Epic 4.5" not in roadmap
+
+
+# ── README LiteLLM exploratory path (Story 4.4) ───────────────────────────────
+
+
+class TestReadmeLiteLLMBoundary:
+    def _content(self) -> str:
+        return (PROJECT_ROOT / "README.md").read_text()
+
+    def _roadmap_section(self) -> str:
+        return self._content().split("### Model expansion roadmap", 1)[1].split(
+            "##", 1
+        )[0]
+
+    def test_readme_mentions_litellm_in_roadmap(self):
+        """AC #1/2 (Story 4.4): README roadmap must document the litellm evaluation path."""
+        section = self._roadmap_section()
+        assert "litellm" in section.lower() or "LiteLLM" in section
+
+    def test_readme_marks_litellm_as_exploratory_not_production(self):
+        """AC #2 (Story 4.4): litellm must not be presented as a production-aligned path."""
+        section = self._roadmap_section()
+        assert (
+            "exploratory" in section.lower()
+            or "local only" in section.lower()
+            or "local-only" in section.lower()
+        )
+
+    def test_readme_agentcore_deployment_remains_bedrock_backed_only(self):
+        """AC #2 (Story 4.4): README must state AgentCore deployment is Bedrock-backed only."""
+        content = self._content()
+        assert "AgentCore deployment in this repo remains Bedrock-backed only" in content
+        assert "MODEL_PROVIDER=bedrock` and `MODEL_PROVIDER=llama" in content
+        assert "local-only values such as `gemini` or `litellm`" in content
