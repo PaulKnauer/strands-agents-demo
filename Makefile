@@ -68,11 +68,11 @@ run:
 
 .PHONY: format
 format:
-	$(BLACK) agent.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
+	$(BLACK) agent.py model_adapters.py deploy/deploy.py deploy/app.py deploy/teardown.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
 
 .PHONY: lint
 lint:
-	$(BLACK) --check agent.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
+	$(BLACK) --check agent.py model_adapters.py deploy/deploy.py deploy/app.py deploy/verify.py deploy/create_dashboard.py infra/app.py infra/agentcore_runtime_role_stack.py infra/github_actions_stack.py infra/transaction_search_stack.py
 
 .PHONY: test-unit
 test-unit:

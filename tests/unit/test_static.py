@@ -356,3 +356,14 @@ class TestProjectContextProviderRules:
         assert "future work, not currently configured providers" in content
         for family in ("Gemma", "Moonshot/Kimi", "Llama", "Qwen", "DeepSeek"):
             assert family in content
+
+    def test_local_adapter_registry_convention_is_documented(self):
+        """AC #3 (Story 4.2): project context must preserve registry convention."""
+        content = self._content()
+        assert "### Local Adapter Registry Convention (Story 4.2+)" in content
+        assert "ModelCapabilities" in content
+        assert "`_REGISTRY`" in content
+        assert "supported_local_providers()" in content
+        assert "planned_model_families()" in content
+        assert "get_model_capabilities(provider)" in content
+        assert "must not import or use the local registry" in content

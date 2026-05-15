@@ -1,5 +1,6 @@
 """Unit tests for model_adapters.py — adapter selection, construction, and boundary."""
 
+import dataclasses
 import os
 import pytest
 from unittest.mock import MagicMock, patch
@@ -149,3 +150,187 @@ class TestGeminiAdapter:
         with patch.dict("sys.modules", {"strands.models.gemini": None}):
             with pytest.raises((ImportError, ModuleNotFoundError, TypeError)):
                 GeminiAdapter({"MODEL_ID": "gemini-pro"}).build()
+
+
+# ── Capability registry ───────────────────────────────────────────────────────
+
+
+class TestCapabilityRegistry:
+    """Registry structure and content contracts."""
+
+    def test_supported_local_providers_includes_bedrock_and_gemini(self):
+        from model_adapters import supported_local_providers
+
+        providers = supported_local_providers()
+        assert "bedrock" in providers
+        assert "gemini" in providers
+
+    def test_supported_local_providers_excludes_planned_families(self):
+        from model_adapters import supported_local_providers
+
+        providers = supported_local_providers()
+        for family in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+            assert family not in providers
+
+    def test_planned_model_families_includes_all_candidate_provider_keys(self):
+        from model_adapters import planned_model_families
+
+        provider_keys = planned_model_families()
+        for expected in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+            assert expected in provider_keys
+
+    def test_get_model_capabilities_bedrock_is_enabled(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("bedrock")
+        assert cap is not None
+        assert cap.enabled is True
+        assert "local" in cap.runtimes
+        assert "deployed" in cap.runtimes
+
+    def test_get_model_capabilities_gemini_is_enabled(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("gemini")
+        assert cap is not None
+        assert cap.enabled is True
+        assert cap.runtimes == ("local",)
+
+    def test_get_model_capabilities_bedrock_runtime_capabilities(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("bedrock")
+        assert cap.supports_converse is True
+        assert cap.supports_tools is True
+        assert cap.supports_guardrails is True
+        assert cap.supports_streaming is True
+        assert cap.bedrock_first is True
+        assert "AWS_REGION" in cap.region_constraint
+
+    def test_get_model_capabilities_gemini_runtime_capabilities(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("gemini")
+        assert cap.supports_converse is False
+        assert cap.supports_tools is True
+        assert cap.supports_guardrails is False
+        assert cap.supports_streaming is False
+        assert cap.bedrock_first is False
+        assert "local-only" in cap.region_constraint
+
+    def test_get_model_capabilities_bedrock_supports_guardrails(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("bedrock")
+        assert cap.supports_guardrails is True
+
+    def test_get_model_capabilities_gemini_does_not_support_guardrails(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("gemini")
+        assert cap.supports_guardrails is False
+
+    def test_get_model_capabilities_planned_families_not_enabled(self):
+        from model_adapters import get_model_capabilities
+
+        for provider in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+            cap = get_model_capabilities(provider)
+            assert (
+                cap is not None
+            ), f"Missing registry entry for planned family: {provider}"
+            assert (
+                cap.enabled is False
+            ), f"Planned family '{provider}' must not be enabled"
+
+    def test_get_model_capabilities_planned_families_bedrock_first(self):
+        from model_adapters import get_model_capabilities
+
+        for provider in ("gemma", "moonshot", "kimi", "llama", "qwen", "deepseek"):
+            cap = get_model_capabilities(provider)
+            assert cap.runtimes == ("planned",)
+            assert cap.supports_converse is False
+            assert cap.region_constraint.startswith("Unknown")
+            assert cap.bedrock_first is True
+
+    def test_get_model_capabilities_unknown_returns_none(self):
+        from model_adapters import get_model_capabilities
+
+        assert get_model_capabilities("openai") is None
+        assert get_model_capabilities("anthropic") is None
+
+    def test_registry_entries_are_immutable(self):
+        from model_adapters import get_model_capabilities
+
+        cap = get_model_capabilities("bedrock")
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            cap.enabled = False  # frozen dataclass must reject mutation
+
+    def test_moonshot_is_canonical_key_for_kimi_alias(self):
+        from model_adapters import get_model_capabilities
+
+        moonshot_cap = get_model_capabilities("moonshot")
+        kimi_cap = get_model_capabilities("kimi")
+        assert moonshot_cap is not None
+        assert kimi_cap is not None
+        assert moonshot_cap.family == kimi_cap.family
+        assert "canonical" in moonshot_cap.notes.lower()
+        assert "alias" in kimi_cap.notes.lower()
+
+
+class TestPlannedFamilyProviderRejection:
+    """Planned family labels must fail clearly when used as MODEL_PROVIDER."""
+
+    _env = {"MODEL_ID": "any", "AWS_REGION": "us-east-1"}
+
+    def test_gemma_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("gemma", self._env)
+
+    def test_moonshot_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("moonshot", self._env)
+
+    def test_kimi_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("kimi", self._env)
+
+    def test_llama_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("llama", self._env)
+
+    def test_qwen_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("qwen", self._env)
+
+    def test_deepseek_raises_value_error(self):
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="planned candidate"):
+            create_local_model_adapter("deepseek", self._env)
+
+    def test_unknown_provider_error_mentions_supported_providers(self):
+        """Unknown providers must distinguish themselves from planned-but-not-enabled families."""
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError, match="bedrock") as exc_info:
+            create_local_model_adapter("openai", self._env)
+        assert "gemini" in str(exc_info.value)
+
+    def test_planned_provider_error_distinguishes_from_unknown(self):
+        """Planned-but-not-enabled error must mention 'planned' to distinguish from unknown."""
+        from model_adapters import create_local_model_adapter
+
+        with pytest.raises(ValueError) as exc_info:
+            create_local_model_adapter("llama", self._env)
+        error_msg = str(exc_info.value)
+        assert "planned" in error_msg.lower() or "not yet enabled" in error_msg.lower()

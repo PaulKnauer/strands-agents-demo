@@ -67,6 +67,15 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Bedrock guardrails are optional and must only be wired when `GUARDRAIL_ID` is set.
 - If provider support differs between local and deployed runtimes, document that boundary explicitly rather than hiding it behind silent fallbacks.
 
+### Local Adapter Registry Convention (Story 4.2+)
+
+- `model_adapters.py` owns a `ModelCapabilities` frozen dataclass registry (`_REGISTRY`) that is the single source of truth for provider/family capability metadata.
+- `supported_local_providers()` returns provider keys where `enabled=True` and `"local"` is in `runtimes`; a provider enabled only for a deployed runtime will not appear.
+- `planned_model_families()` returns provider keys that are planned but not yet enabled.
+- `get_model_capabilities(provider)` returns the `ModelCapabilities` entry or `None` for unknown keys.
+- Planned family metadata (`enabled=False`) must not imply runnable provider support; `create_local_model_adapter()` raises `ValueError` with "planned candidate" language for these entries.
+- The deployed runtime (`deploy/app.py`) must not import or use the local registry; it remains Bedrock-only via its own provider check.
+
 ### Testing Rules
 
 - Preserve the contract-test mindset: scaffold files and repo conventions are enforced by static tests, not just behavioral tests.

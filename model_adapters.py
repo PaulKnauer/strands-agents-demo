@@ -4,9 +4,161 @@ This module is intentionally local-only. deploy/app.py uses direct Bedrock Conve
 via boto3 and must not import from here.
 """
 
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Mapping
 
 from strands.models import BedrockModel
+
+
+@dataclass(frozen=True)
+class ModelCapabilities:
+    provider: str
+    family: str
+    runtimes: tuple[str, ...]
+    enabled: bool
+    supports_converse: bool
+    supports_tools: bool
+    supports_guardrails: bool
+    supports_streaming: bool
+    bedrock_first: bool
+    region_constraint: str
+    notes: str = ""
+
+
+# Registry of known provider/family entries.
+# enabled=True  → valid MODEL_PROVIDER key for local runtime today.
+# enabled=False → planned candidate; not selectable until a rollout story enables it.
+_REGISTRY: tuple[ModelCapabilities, ...] = (
+    ModelCapabilities(
+        provider="bedrock",
+        family="Amazon Bedrock",
+        runtimes=("local", "deployed"),
+        enabled=True,
+        supports_converse=True,
+        supports_tools=True,
+        supports_guardrails=True,
+        supports_streaming=True,
+        bedrock_first=True,
+        region_constraint="Configured AWS_REGION; default docs use us-east-1.",
+        notes="Supports local Strands runtime and deployed AgentCore runtime.",
+    ),
+    ModelCapabilities(
+        provider="gemini",
+        family="Google Gemini",
+        runtimes=("local",),
+        enabled=True,
+        supports_converse=False,
+        supports_tools=True,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=False,
+        region_constraint="Not region-scoped by AWS_REGION; local-only Google API path.",
+        notes="Local only via strands-agents[gemini] optional dependency.",
+    ),
+    # Planned Bedrock-first candidate families — enabled=False until Story 4.3 validates them.
+    ModelCapabilities(
+        provider="gemma",
+        family="Gemma",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in Story 4.3.",
+    ),
+    ModelCapabilities(
+        provider="moonshot",
+        family="Moonshot/Kimi",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in Story 4.3. Canonical key: moonshot.",
+    ),
+    ModelCapabilities(
+        provider="kimi",
+        family="Moonshot/Kimi",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region; alias for Moonshot/Kimi.",
+        notes="Planned alias for Moonshot/Kimi via Amazon Bedrock in Story 4.3.",
+    ),
+    ModelCapabilities(
+        provider="llama",
+        family="Llama",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in Story 4.3.",
+    ),
+    ModelCapabilities(
+        provider="qwen",
+        family="Qwen",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in Story 4.3.",
+    ),
+    ModelCapabilities(
+        provider="deepseek",
+        family="DeepSeek",
+        runtimes=("planned",),
+        enabled=False,
+        supports_converse=False,
+        supports_tools=False,
+        supports_guardrails=False,
+        supports_streaming=False,
+        bedrock_first=True,
+        region_constraint="Unknown until Story 4.3 validates Bedrock model ID and region.",
+        notes="Planned via Amazon Bedrock in Story 4.3.",
+    ),
+)
+
+_REGISTRY_BY_PROVIDER: Mapping[str, ModelCapabilities] = MappingProxyType(
+    {cap.provider: cap for cap in _REGISTRY}
+)
+if len(_REGISTRY_BY_PROVIDER) != len(_REGISTRY):
+    raise RuntimeError("Duplicate provider keys in _REGISTRY")
+
+
+def get_model_capabilities(provider: str) -> ModelCapabilities | None:
+    """Return capability metadata for a provider key, or None if unknown."""
+    return _REGISTRY_BY_PROVIDER.get(provider)
+
+
+def supported_local_providers() -> list[str]:
+    """Return provider keys that are currently enabled for local runtime use."""
+    return [
+        cap.provider for cap in _REGISTRY if cap.enabled and "local" in cap.runtimes
+    ]
+
+
+def planned_model_families() -> list[str]:
+    """Return provider keys that are planned but not yet enabled."""
+    return [cap.provider for cap in _REGISTRY if not cap.enabled]
 
 
 class BedrockAdapter:
@@ -46,12 +198,21 @@ def create_local_model_adapter(provider: str, env: Mapping[str, str]):
     """Return the appropriate local model adapter for the given provider.
 
     Raises ValueError for unsupported providers — no silent fallback.
+    Distinguishes planned-but-not-enabled families from completely unknown keys.
     """
     if provider == "bedrock":
         return BedrockAdapter(env)
     elif provider == "gemini":
         return GeminiAdapter(env)
     else:
+        cap = _REGISTRY_BY_PROVIDER.get(provider)
+        if cap is not None and not cap.enabled:
+            raise ValueError(
+                f"MODEL_PROVIDER '{provider}' ({cap.family}) is a planned candidate "
+                f"and is not yet enabled for local runtime use. "
+                f"Supported local providers: {supported_local_providers()}."
+            )
         raise ValueError(
-            f"Unknown MODEL_PROVIDER: '{provider}'. Expected 'bedrock' or 'gemini'."
+            f"Unknown MODEL_PROVIDER: '{provider}'. "
+            f"Supported local providers: {supported_local_providers()}."
         )
