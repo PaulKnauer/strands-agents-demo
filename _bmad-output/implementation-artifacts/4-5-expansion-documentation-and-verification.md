@@ -58,6 +58,20 @@ so that I can adopt supported new model paths with confidence.
 - [x] [Review][Patch] Replace `Story 4.5+` planned-family wording with unambiguous post-Story-4.5 future-work wording [_bmad-output/project-context.md:66]
 - [x] [Review][Patch] Add static coverage for every provider row in the README verification strategy [tests/unit/test_static.py:417]
 
+<!-- Code review 2 — 2026-05-15 -->
+- [x] [Review][Decision] Should LITELLM_API_BASE validation restrict http:// URLs to localhost-only or allow all http:// endpoints? — Resolved: restrict http:// to localhost/127.x only; added http-external rejection test, localhost acceptance test, and 127.x acceptance test [model_adapters.py:234, tests/unit/test_model_adapters.py]
+- [x] [Review][Patch] Replace full-table row snapshot in TestReadmeVerificationStrategy with individual property assertions — Replaced exact pipe-delimited row assertions with semantic checks: all provider tokens, pinned model IDs, credential names, planned-family rejection label [tests/unit/test_static.py:463]
+- [x] [Review][Defer] MOONSHOT_API_KEY validation is moonshot-prefix-only; other LiteLLM provider prefixes (openai/, anthropic/) pass __init__ without credential check and fail later at runtime with no guidance [model_adapters.py:222] — deferred, acceptable for exploratory path
+- [x] [Review][Defer] self._client_args or None silently converts {} to None; works today but fragile if future code stores any falsy-truthy value in _client_args [model_adapters.py:230] — deferred, currently correct
+- [x] [Review][Defer] "local" not in cap.runtimes guard is dead code given current registry invariants; all enabled entries have "local" [model_adapters.py:278] — deferred, defensive programming for future entries
+- [x] [Review][Defer] test_litellm_rejection_occurs_before_bedrock_call in test_app.py duplicates the assert_not_called assertion already in test_litellm_provider_rejected_by_deployed_runtime [tests/unit/test_app.py:398] — deferred, harmless
+- [x] [Review][Defer] deploy/verify.py Llama hint not actionable — doesn't name the Bedrock model ID the operator must request access for [deploy/verify.py:416] — deferred, quality nit
+- [x] [Review][Defer] LITELLM_API_BASE path component not validated; URLs like https://api.example.com (no /v1 path) pass silently and may misbehave with some LiteLLM provider wrappers [model_adapters.py:227] — deferred, acceptable for exploratory path
+- [x] [Review][Defer] create_local_model_adapter gemini branch reached only after registry checks; a future enabled=False on gemini would produce misleading "planned candidate" error [model_adapters.py:282] — deferred, future registry risk
+- [x] [Review][Defer] Enabled provider with bedrock_first=False and no specific adapter branch silently falls through to confusing "no local adapter implementation" error [model_adapters.py:288] — deferred, future extensibility risk
+- [x] [Review][Defer] Model-support matrix (roadmap table + verification table) missing explicit required-config and deployment-expectation columns; info is split across four prose locations [README.md:406] — deferred, info present in surrounding prose
+- [x] [Review][Defer] TestReadmeProviderRoadmap asserts backtick-coupled Markdown syntax for ValueError string; breaks on prose reformat without actual regression [tests/unit/test_static.py:337] — deferred, working correctly today
+
 ## Dev Notes
 
 ### Story Intent
@@ -308,6 +322,7 @@ claude-sonnet-4-6
 - `tests/unit/test_static.py`: added `TestReadmeVerificationStrategy` class (5 tests) asserting verification strategy heading, pytest command, litellm CI exclusion, deployed scope, and no Epic 4.5 delivery claim.
 - 325 tests pass (320 baseline + 5 new). `make lint` clean.
 - Code review follow-up: addressed 6 patch findings; full test suite now 326 tests pass, 0 failures. `make lint` clean.
+- Code review 2 follow-up: restricted LITELLM_API_BASE http:// to localhost/127.x only (added 3 new tests); replaced brittle full-table snapshot with semantic assertions; updated README make test count to 329. Full suite 329 passed, 0 failures.
 
 ### File List
 
@@ -315,6 +330,8 @@ claude-sonnet-4-6
 - _bmad-output/project-context.md
 - deploy/verify.py
 - tests/unit/test_static.py
+- tests/unit/test_model_adapters.py
+- model_adapters.py
 - _bmad-output/implementation-artifacts/sprint-status.yaml
 - _bmad-output/implementation-artifacts/4-5-expansion-documentation-and-verification.md
 
@@ -322,3 +339,4 @@ claude-sonnet-4-6
 
 - 2026-05-15: Implemented Story 4.5 documentation and verification strategy.
 - 2026-05-15: Addressed code review findings — clarified Bedrock-backed deployed boundary, updated verifier hint and test count, tightened static contract coverage, and removed ambiguous Story 4.5+ future-work wording.
+- 2026-05-15: Addressed code review 2 findings — restricted LITELLM_API_BASE http:// to localhost/127.x only; replaced brittle full-table snapshot test with semantic assertions; updated README test count to 329.

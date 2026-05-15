@@ -455,7 +455,7 @@ make teardown-redteam-role  # Destroy the GitHub Actions OIDC role stack
 make teardown-transaction-search  # Destroy the Transaction Search CDK stack
 make dashboard      # Create/update CloudWatch NIST-RMF compliance dashboard
 make redteam        # Run promptfoo adversarial red-team scan
-make test           # Run unit + eval tests (326 tests)
+make test           # Run unit + eval tests (329 tests)
 make test-unit      # Unit tests only
 make lint           # Check formatting with black (no changes made)
 make format         # Auto-format all Python files with black

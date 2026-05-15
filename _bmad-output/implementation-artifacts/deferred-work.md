@@ -22,3 +22,16 @@
 - Provider lookup is case-sensitive; `"Bedrock"` falls to unknown-provider error [model_adapters.py:197]. Deferred — `os.environ` is the caller and already produces exact strings; normalization is low-priority.
 - No `__all__` defined; `_REGISTRY` and `_REGISTRY_BY_PROVIDER` are importable as apparent public symbols [model_adapters.py]. Deferred as project-wide convention work.
 - No test verifies the duplicate-key guard (`assert len(_REGISTRY_BY_PROVIDER) == len(_REGISTRY)`) actually fires on a malformed registry [model_adapters.py:143-145]. Deferred as low-priority guard coverage.
+
+## Deferred from: code review of 4-5-expansion-documentation-and-verification (2026-05-15)
+
+- MOONSHOT_API_KEY validation is moonshot-prefix-only; other LiteLLM provider prefixes (openai/, anthropic/) pass `__init__` without credential check and fail later at runtime with no guidance [model_adapters.py:222]. Deferred — acceptable for exploratory local-only path with no CI requirement.
+- `self._client_args or None` silently converts `{}` to `None`; works correctly today but fragile if future code stores any falsy-truthy value in `_client_args` [model_adapters.py:230]. Deferred — no current breakage.
+- `"local" not in cap.runtimes` guard in `create_local_model_adapter` is dead code given current registry invariants; all enabled entries have `"local"` [model_adapters.py:278]. Deferred — defensive programming that protects future entries.
+- `test_litellm_rejection_occurs_before_bedrock_call` in `test_app.py` duplicates the `assert_not_called` assertion already covered by `test_litellm_provider_rejected_by_deployed_runtime` [tests/unit/test_app.py:398]. Deferred — harmless redundancy.
+- `deploy/verify.py` Llama failure hint doesn't name the Bedrock model ID the operator must request access for [deploy/verify.py:416]. Deferred — quality nit, not a functional issue.
+- `LITELLM_API_BASE` path component not validated; URLs with no `/v1` path (e.g. `https://api.example.com`) pass silently and may misbehave with some LiteLLM provider wrappers [model_adapters.py:227]. Deferred — acceptable for exploratory path.
+- `create_local_model_adapter` gemini branch reached only after registry checks; a future `enabled=False` on gemini in the registry would produce a misleading "planned candidate" error rather than a gemini-specific message [model_adapters.py:282]. Deferred — future registry risk, unlikely.
+- Enabled provider with `bedrock_first=False` and no specific adapter branch silently falls through to confusing "no local adapter implementation" error [model_adapters.py:288]. Deferred — future extensibility risk; add a new branch when adding a non-Bedrock, non-gemini, non-litellm provider.
+- README model-support matrix is split across the roadmap table (status/runtime), the verification table (verification level), and prose paragraphs (required config, deployment expectation); spec called for these fields co-located in the matrix [README.md:406]. Deferred — all information is present; restructuring would be significant churn.
+- `TestReadmeProviderRoadmap` asserts backtick-coupled Markdown syntax (`\`ValueError\``) for the adapter rejection sentence; breaks on prose reformat without functional regression [tests/unit/test_static.py:337]. Deferred — working correctly today.

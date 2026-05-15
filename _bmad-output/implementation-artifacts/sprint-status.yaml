@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-08 20:42:26 SAST
-last_updated: 2026-05-15 13:03:30 SAST
+last_updated: 2026-05-15 15:03:03 SAST
 project: strands-agents-demo
 project_key: NOKEY
 tracking_system: file-system
@@ -65,10 +65,10 @@ development_status:
   epic-3-retrospective: done
 
   # Epic 4: Multi-Provider Model Expansion
-  epic-4: in-progress
+  epic-4: done
   4-1-expansion-scope-alignment: done
   4-2-capability-registry-and-adapter-extension: done
   4-3-bedrock-first-model-family-rollout: done
   4-4-optional-direct-provider-evaluation-boundary: done
   4-5-expansion-documentation-and-verification: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done

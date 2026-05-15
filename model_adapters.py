@@ -236,6 +236,16 @@ class LiteLLMAdapter:
                     "LITELLM_API_BASE must be an absolute http(s) URL, "
                     "for example https://api.moonshot.ai/v1."
                 )
+            hostname = parsed.hostname or ""
+            if (
+                parsed.scheme == "http"
+                and hostname != "localhost"
+                and not hostname.startswith("127.")
+            ):
+                raise ValueError(
+                    "LITELLM_API_BASE with http:// is only allowed for localhost endpoints; "
+                    "use https:// for external providers (e.g. https://api.moonshot.ai/v1)."
+                )
         self._client_args = {"api_base": api_base} if api_base else {}
 
     def build(self):

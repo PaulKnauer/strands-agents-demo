@@ -553,6 +553,40 @@ class TestLiteLLMAdapter:
                 }
             )
 
+    def test_litellm_adapter_rejects_http_for_external_host(self):
+        from model_adapters import LiteLLMAdapter
+
+        with pytest.raises(ValueError, match="localhost"):
+            LiteLLMAdapter(
+                {
+                    "MODEL_ID": "moonshot/moonshot-v1-8k",
+                    "MOONSHOT_API_KEY": "test-key",
+                    "LITELLM_API_BASE": "http://api.moonshot.ai/v1",
+                }
+            )
+
+    def test_litellm_adapter_accepts_http_for_localhost(self):
+        from model_adapters import LiteLLMAdapter
+
+        adapter = LiteLLMAdapter(
+            {
+                "MODEL_ID": "some/local-model",
+                "LITELLM_API_BASE": "http://localhost:8080/v1",
+            }
+        )
+        assert adapter._client_args == {"api_base": "http://localhost:8080/v1"}
+
+    def test_litellm_adapter_accepts_http_for_127_loopback(self):
+        from model_adapters import LiteLLMAdapter
+
+        adapter = LiteLLMAdapter(
+            {
+                "MODEL_ID": "some/local-model",
+                "LITELLM_API_BASE": "http://127.0.0.1:11434/v1",
+            }
+        )
+        assert adapter._client_args == {"api_base": "http://127.0.0.1:11434/v1"}
+
     def test_litellm_adapter_import_failure_surfaces_clearly(self):
         """If strands-agents[litellm] is missing, error guidance must be actionable."""
         from model_adapters import LiteLLMAdapter
