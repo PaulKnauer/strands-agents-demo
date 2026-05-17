@@ -67,7 +67,7 @@ class TestRedteamWorkflowCredentials:
             config = yaml.safe_load(f)
 
         target_ids = [target["id"] for target in config["targets"]]
-        assert target_ids == ["bedrock:anthropic.claude-3-5-haiku-20241022-v1:0"]
+        assert target_ids == ["bedrock:amazon.nova-micro-v1:0"]
         content = PROMPTFOO_CONFIG.read_text().lower()
         assert "bedrock-agentcore" not in content
         assert "runtimes/" not in content

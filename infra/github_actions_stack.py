@@ -54,10 +54,10 @@ class GithubActionsStack(Stack):
                     "bedrock:InvokeModel",
                     "bedrock:InvokeModelWithResponseStream",
                 ],
-                # Wildcard covers any Anthropic foundation model so that upgrading
-                # the red-team target model does not require a CDK redeploy.
+                # Wildcard covers any foundation model so that changing the
+                # red-team target model never requires a CDK redeploy.
                 resources=[
-                    f"arn:{self.partition}:bedrock:{self.region}::foundation-model/anthropic.*"
+                    f"arn:{self.partition}:bedrock:{self.region}::foundation-model/*"
                 ],
             )
         )
