@@ -32,8 +32,15 @@ def get_today_date() -> str:
         return f"Error retrieving today's date: {str(e)}"
 
 
+def _validate_env() -> None:
+    missing = [k for k in ("MODEL_PROVIDER", "MODEL_ID") if not os.environ.get(k)]
+    if missing:
+        raise EnvironmentError(f"Missing required env vars: {', '.join(missing)}")
+
+
 def create_agent():
     """Construct and return the agent. Deferred so import has no side effects."""
+    _validate_env()
     adapter = create_local_model_adapter(os.environ["MODEL_PROVIDER"], os.environ)
     model = adapter.build()
     return Agent(

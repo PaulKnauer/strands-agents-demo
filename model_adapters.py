@@ -4,9 +4,10 @@ This module is intentionally local-only. deploy/app.py uses direct Bedrock Conve
 via boto3 and must not import from here.
 """
 
+from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping
 from urllib.parse import urlparse
 
 from strands.models import BedrockModel
@@ -183,7 +184,21 @@ def planned_model_families() -> list[str]:
     return [cap.provider for cap in _REGISTRY if not cap.enabled]
 
 
-class BedrockAdapter:
+class LocalModelAdapter(ABC):
+    """Abstract base class for all local model adapters.
+
+    Every concrete adapter must implement ``build()`` and return a
+    framework-compatible model instance.  This contract is enforced at
+    class-definition time, preventing silent duck-typing failures when a
+    new adapter forgets to implement the method.
+    """
+
+    @abstractmethod
+    def build(self):
+        """Return a framework-compatible model instance."""
+
+
+class BedrockAdapter(LocalModelAdapter):
     def __init__(self, env: Mapping[str, str]):
         self._model_id = env["MODEL_ID"]
         self._region = env["AWS_REGION"]
@@ -205,7 +220,7 @@ class BedrockAdapter:
         )
 
 
-class GeminiAdapter:
+class GeminiAdapter(LocalModelAdapter):
     def __init__(self, env: Mapping[str, str]):
         self._model_id = env["MODEL_ID"]
 
@@ -216,7 +231,7 @@ class GeminiAdapter:
         return GeminiModel(model_id=self._model_id)
 
 
-class LiteLLMAdapter:
+class LiteLLMAdapter(LocalModelAdapter):
     def __init__(self, env: Mapping[str, str]):
         self._model_id = env["MODEL_ID"]
         if (
@@ -264,12 +279,22 @@ class LiteLLMAdapter:
         )
 
 
-def create_local_model_adapter(provider: str, env: Mapping[str, str]):
+# Dispatch map for non-Bedrock local adapters (OCP: add new provider here + a new class,
+# no edits needed inside create_local_model_adapter).
+_ADAPTER_MAP: dict[str, type[LocalModelAdapter]] = {
+    "gemini": GeminiAdapter,
+    "litellm": LiteLLMAdapter,
+}
+
+
+def create_local_model_adapter(provider: str, env: Mapping[str, str]) -> LocalModelAdapter:
     """Return the appropriate local model adapter for the given provider.
 
     Raises ValueError for unsupported providers — no silent fallback.
     Distinguishes planned-but-not-enabled families from completely unknown keys.
     Registry-backed: any enabled Bedrock-first local provider uses BedrockAdapter.
+    Non-Bedrock providers are dispatched via _ADAPTER_MAP — extend that dict to add
+    a new provider without touching this function.
     """
     cap = _REGISTRY_BY_PROVIDER.get(provider)
     if cap is None:
@@ -288,12 +313,8 @@ def create_local_model_adapter(provider: str, env: Mapping[str, str]):
             f"MODEL_PROVIDER '{provider}' is not enabled for local runtime use. "
             f"Supported local providers: {supported_local_providers()}."
         )
-    # Non-Bedrock local adapters — each requires its own class
-    if provider == "gemini":
-        return GeminiAdapter(env)
-    # LiteLLM is an exploratory local-only evaluation boundary (Story 4.4)
-    if provider == "litellm":
-        return LiteLLMAdapter(env)
+    if provider in _ADAPTER_MAP:
+        return _ADAPTER_MAP[provider](env)
     if cap.bedrock_first:
         return BedrockAdapter(env)
     raise ValueError(

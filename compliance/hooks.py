@@ -31,10 +31,10 @@ JSONL output contract:
 
 import json
 import logging
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from strands.hooks import HookProvider, HookRegistry
 from strands.hooks.events import (
@@ -63,10 +63,27 @@ class AuditLoggingHook(HookProvider):
         agent = Agent(model=model, tools=[...], hooks=[AuditLoggingHook()])
     """
 
-    def __init__(self, session_id: Optional[str] = None) -> None:
+    def __init__(self, session_id: str | None = None) -> None:
         self.session_id: str = session_id or str(uuid.uuid4())
-        self._invocation_id: Optional[str] = None
-        self._start_time: Optional[float] = None
+        # threading.local() stores _invocation_id and _start_time per-thread so
+        # concurrent invocations on different threads never race on these fields.
+        self._local = threading.local()
+
+    @property
+    def _invocation_id(self) -> str | None:
+        return getattr(self._local, "invocation_id", None)
+
+    @_invocation_id.setter
+    def _invocation_id(self, value: str | None) -> None:
+        self._local.invocation_id = value
+
+    @property
+    def _start_time(self) -> float | None:
+        return getattr(self._local, "start_time", None)
+
+    @_start_time.setter
+    def _start_time(self, value: float | None) -> None:
+        self._local.start_time = value
 
     def register_hooks(self, registry: HookRegistry) -> None:
         """Register callbacks on all five Strands hook events.
@@ -81,10 +98,18 @@ class AuditLoggingHook(HookProvider):
         registry.add_callback(MessageAddedEvent, self._on_message_added)
 
     def _emit(self, record: dict) -> None:
-        """Attach common fields and emit the record via the audit logger."""
-        record["timestamp"] = datetime.now(timezone.utc).isoformat()
-        record["session_id"] = self.session_id
-        logger.debug(json.dumps(record))
+        """Attach common fields and emit the record via the audit logger.
+
+        Wrapped in try/except so a non-serialisable value in ``record`` never
+        crashes the agent — a gap in the audit trail is preferable to a
+        production outage.
+        """
+        try:
+            record["timestamp"] = datetime.now(timezone.utc).isoformat()
+            record["session_id"] = self.session_id
+            logger.debug(json.dumps(record))
+        except Exception:
+            pass
 
     def _on_before_invocation(self, event: BeforeInvocationEvent) -> None:
         """Emit invocation_start record.

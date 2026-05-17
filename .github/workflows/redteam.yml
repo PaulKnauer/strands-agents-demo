@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write
 
 jobs:
   test:
@@ -90,3 +91,36 @@ jobs:
           name: redteam-report
           path: compliance/redteam-report.json
           retention-days: 90 # NIST audit evidence retention
+
+      - name: Write compliance gap summary on failure
+        if: failure()
+        run: |
+          echo "## Red-Team Scan Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "NIST AI RMF evidence gap: the weekly red-team scan did not complete." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the [run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) and re-trigger this workflow once the issue is resolved." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Common causes and fixes:**" >> $GITHUB_STEP_SUMMARY
+          echo "- OIDC provider missing: \`cd infra && cdk deploy GitHubActionsStack\`" >> $GITHUB_STEP_SUMMARY
+          echo "- AWS_ROLE_TO_ASSUME secret missing: set it to the role ARN from the CDK stack output" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub issue on scan failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Red-team scan failed $(date -u +%Y-%m-%d)" \
+            --body "The weekly NIST AI RMF red-team scan failed on $(date -u +%Y-%m-%dT%H:%M:%SZ).
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          This creates a gap in NIST AI RMF compliance evidence (MEASURE-2.4/2.7/2.8/2.11). Investigate and re-run the workflow once fixed.
+
+          **Common fix:** If the error is \`No OpenIDConnect provider found\`, deploy the CDK infrastructure:
+          \`\`\`
+          cd infra && cdk deploy GitHubActionsStack
+          \`\`\`" \
+            --label "compliance" \
+          || echo "Issue creation skipped (label may not exist — create a 'compliance' label to enable this)"

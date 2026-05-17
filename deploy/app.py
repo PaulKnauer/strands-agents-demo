@@ -12,6 +12,7 @@ is active before boto3 imports and Bedrock calls occur.
 import datetime
 import os
 import re
+import time
 from contextlib import contextmanager
 
 import boto3
@@ -175,6 +176,24 @@ def _format_age_response(dob: datetime.date, today: datetime.date) -> str:
     )
 
 
+def _converse_with_retry(bedrock, max_retries: int = 3, **kwargs) -> dict:
+    """Call Bedrock Converse with exponential backoff on ThrottlingException."""
+    delay = 1.0
+    for attempt in range(max_retries):
+        try:
+            return bedrock.converse(**kwargs)
+        except ClientError as e:
+            if (
+                e.response["Error"]["Code"] == "ThrottlingException"
+                and attempt < max_retries - 1
+            ):
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise
+    raise RuntimeError("_converse_with_retry exhausted retries without returning")
+
+
 def _run_agent(prompt: str) -> str:
     """Run the agentic tool-calling loop via the Bedrock Converse API."""
     # MODEL_ID is always injected by deploy.py's environmentVariables; the default
@@ -219,7 +238,7 @@ def _run_agent(prompt: str) -> str:
                 )
                 if guardrail_config:
                     converse_kwargs["guardrailConfig"] = guardrail_config
-                response = bedrock.converse(**converse_kwargs)
+                response = _converse_with_retry(bedrock, **converse_kwargs)
                 _set_span_attribute(
                     model_span, "bedrock.stop_reason", response["stopReason"]
                 )
