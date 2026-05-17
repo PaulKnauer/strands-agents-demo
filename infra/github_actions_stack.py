@@ -14,11 +14,6 @@ class GithubActionsStack(Stack):
         owner = self.node.try_get_context("githubOwner") or "PaulKnauer"
         repo = self.node.try_get_context("githubRepo") or "strands-agents-demo"
         github_ref = self.node.try_get_context("githubRef") or "refs/heads/main"
-        model_id = (
-            self.node.try_get_context("modelId")
-            or "anthropic.claude-3-haiku-20240307-v1:0"
-        )
-
         oidc_provider_arn = self.node.try_get_context("githubOidcProviderArn")
         if not oidc_provider_arn:
             oidc_provider = iam.CfnOIDCProvider(
@@ -59,8 +54,10 @@ class GithubActionsStack(Stack):
                     "bedrock:InvokeModel",
                     "bedrock:InvokeModelWithResponseStream",
                 ],
+                # Wildcard covers any Anthropic foundation model so that upgrading
+                # the red-team target model does not require a CDK redeploy.
                 resources=[
-                    f"arn:{self.partition}:bedrock:{self.region}::foundation-model/{model_id}"
+                    f"arn:{self.partition}:bedrock:{self.region}::foundation-model/anthropic.*"
                 ],
             )
         )
