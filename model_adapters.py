@@ -287,7 +287,9 @@ _ADAPTER_MAP: dict[str, type[LocalModelAdapter]] = {
 }
 
 
-def create_local_model_adapter(provider: str, env: Mapping[str, str]) -> LocalModelAdapter:
+def create_local_model_adapter(
+    provider: str, env: Mapping[str, str]
+) -> LocalModelAdapter:
     """Return the appropriate local model adapter for the given provider.
 
     Raises ValueError for unsupported providers — no silent fallback.
