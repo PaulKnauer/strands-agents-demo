@@ -124,13 +124,15 @@ class TestRedteamWorkflowCredentials:
         source.write_text(PROMPTFOO_CONFIG.read_text())
 
         guardrails_enabled = prepare_promptfoo_config(
-            source, destination, guardrail_id="abc123"
+            source, destination, guardrail_id="abc123", guardrail_version="DRAFT"
         )
         content = destination.read_text()
 
         assert guardrails_enabled is True
-        assert "guardrailIdentifier: ${GUARDRAIL_ID}" in content
-        assert "guardrailVersion: ${GUARDRAIL_VERSION}" in content
+        assert "guardrailIdentifier: abc123" in content
+        assert "guardrailVersion: DRAFT" in content
+        assert "${GUARDRAIL_ID}" not in content
+        assert "${GUARDRAIL_VERSION}" not in content
 
 
 class TestGithubActionsCdkStack:

@@ -76,6 +76,7 @@ jobs:
         run: python compliance/prepare_promptfoo_config.py
         env:
           GUARDRAIL_ID: ${{ secrets.GUARDRAIL_ID }}
+          GUARDRAIL_VERSION: ${{ secrets.GUARDRAIL_VERSION || 'DRAFT' }}
 
       - name: Run promptfoo red-team scan
         run: npx promptfoo@0.121.2 redteam run --config compliance/promptfoo-redteam.ci.yaml --output compliance/redteam-report.json

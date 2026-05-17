@@ -14,16 +14,31 @@ def prepare_promptfoo_config(
     source: Path = SOURCE,
     destination: Path = DESTINATION,
     guardrail_id: str | None = None,
+    guardrail_version: str | None = None,
 ) -> bool:
     """Write a promptfoo config and return whether guardrails were kept."""
     guardrail_id = (
-        guardrail_id if guardrail_id is not None else os.environ.get("GUARDRAIL_ID")
+        guardrail_id if guardrail_id is not None else os.environ.get("GUARDRAIL_ID", "")
+    )
+    guardrail_version = (
+        guardrail_version
+        if guardrail_version is not None
+        else os.environ.get("GUARDRAIL_VERSION", "DRAFT")
     )
     lines = source.read_text().splitlines()
 
     if not guardrail_id:
         lines = [
             line for line in lines if not any(key in line for key in GUARDRAIL_KEYS)
+        ]
+    else:
+        # promptfoo 0.121.2 does not expand ${VAR} in target config sections;
+        # substitute directly so Bedrock receives the concrete guardrail identifier.
+        lines = [
+            line.replace("${GUARDRAIL_ID}", guardrail_id).replace(
+                "${GUARDRAIL_VERSION}", guardrail_version
+            )
+            for line in lines
         ]
 
     destination.write_text("\n".join(lines) + "\n")
