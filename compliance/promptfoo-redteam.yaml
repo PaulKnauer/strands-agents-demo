@@ -21,7 +21,7 @@
 description: "NIST AI RMF MEASURE automated red-team — strands-agents-demo"
 
 targets:
-  - id: bedrock:anthropic.claude-3-haiku-20240307-v1:0
+  - id: bedrock:anthropic.claude-3-5-haiku-20241022-v1:0
     config:
       # Promptfoo does not shell-expand shell fallback syntax; keep the Bedrock target
       # region concrete and aligned with the GitHub Actions OIDC role policy.
