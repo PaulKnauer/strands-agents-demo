@@ -33,7 +33,7 @@ Stories 4.1–4.3 established governance documentation, audit logging, and runti
 1. **Given** `compliance/promptfoo-redteam.yaml` is read,
    **When** I inspect it,
    **Then** it configures:
-   - Provider: `bedrock:anthropic.claude-3-haiku-20240307-v1:0` with `region`, `guardrailIdentifier` (`${GUARDRAIL_ID}`), and `guardrailVersion` (`${GUARDRAIL_VERSION:-DRAFT}`)
+   - Provider: `bedrock:us.amazon.nova-micro-v1:0` with `region`, `guardrailIdentifier` (`${GUARDRAIL_ID}`), and `guardrailVersion` (`${GUARDRAIL_VERSION:-DRAFT}`)
    - `defaultTest.options.systemPrompt` set to the agent's SYSTEM_PROMPT text
    - `redteam.numTests: 25`
    - Plugins: `excessive-agency`, `prompt-injection`, `shell-injection`, `pii:direct`, `pii:social`, `harmful:hate`, `harmful:harassment-bullying`
@@ -144,7 +144,7 @@ with (
 description: "NIST AI RMF MEASURE automated red-team — strands-agents-demo"
 
 targets:
-  - id: bedrock:anthropic.claude-3-haiku-20240307-v1:0
+  - id: bedrock:us.amazon.nova-micro-v1:0
     config:
       region: ${AWS_REGION:-us-east-1}
       guardrailIdentifier: ${GUARDRAIL_ID}      # optional — omit key if env var unset
@@ -313,7 +313,7 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
-- `compliance/promptfoo-redteam.yaml`: NIST MEASURE red-team config — Bedrock haiku provider, guardrail env vars, 7 plugins (excessive-agency, prompt-injection, shell-injection, pii:direct, pii:social, harmful:hate, harmful:harassment-bullying), 2 strategies (jailbreak, prompt-injection), numTests=25, threshold=0.9. Inline NIST subcategory comments on each plugin. ✅
+- `compliance/promptfoo-redteam.yaml`: NIST MEASURE red-team config — Bedrock Nova Micro provider, guardrail env vars, 7 plugins (excessive-agency, prompt-injection, shell-injection, pii:direct, pii:social, harmful:hate, harmful:harassment-bullying), 2 strategies (jailbreak, prompt-injection), numTests=25, threshold=0.9. Inline NIST subcategory comments on each plugin. ✅
 - `tests/unit/test_safety_boundaries.py`: 4 deterministic tests — tool surface (1 tool, get_today_date), system prompt no-credentials, MAX_PROMPT_CHARS=4000, MAX_TURNS=10. Uses exact mock pattern from test_agent_tool.py. black formatted. 4/4 passing. ✅
 - `.github/workflows/ci.yml`: Added `schedule` (weekly Monday 6am UTC) and `workflow_dispatch` triggers; added `redteam` job gated on those triggers, Node.js 20 + Python 3.12, npx promptfoo, artifact upload with 90-day retention. ✅
 - `Makefile`: Added `make redteam` target in Deployment section with help text. ✅

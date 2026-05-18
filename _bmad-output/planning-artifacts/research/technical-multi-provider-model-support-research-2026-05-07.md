@@ -108,7 +108,7 @@ This matters because it creates a new low-complexity option:
 The alternative is a direct-provider strategy where:
 - Gemma can be accessed via the Gemini API or open-weight deployment paths
 - Moonshot AI exposes an OpenAI-compatible Kimi API
-- DeepSeek exposes OpenAI-compatible and Anthropic-compatible API formats
+- DeepSeek exposes multiple API compatibility formats
 - Qwen exposes an OpenAI-compatible API platform
 
 That direct-provider route is still viable, but it is no longer the only way to get the model diversity you want.
@@ -263,7 +263,7 @@ A direct-provider strategy should not let each provider’s wire format leak int
 - `tool_results`
 - `final_text`
 
-This is especially important because some providers emphasize OpenAI-compatible formats, while DeepSeek also documents Anthropic-compatible interfaces. Supporting multiple external vendors without a canonical internal message contract would make the brownfield change brittle.
+This is especially important because some providers emphasize OpenAI-compatible formats, while DeepSeek also documents alternate compatibility interfaces. Supporting multiple external vendors without a canonical internal message contract would make the brownfield change brittle.
 
 _JSON and XML: JSON is the relevant interchange format._
 _Protobuf and MessagePack: not central to the current model-inference path._

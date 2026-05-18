@@ -153,7 +153,7 @@ strands-agents-demo/
 ```
 # Amazon Bedrock (primary MVP path)
 MODEL_PROVIDER=bedrock
-MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+MODEL_ID=us.amazon.nova-micro-v1:0
 AWS_REGION=us-east-1
 
 # Initial local Gemini adapter path
@@ -396,7 +396,7 @@ model = BedrockModel(model_id=os.environ["MODEL_ID"], region=os.environ["AWS_REG
 
 ```python
 # ANTI-PATTERN: hardcoded credentials
-model = BedrockModel(model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+model = BedrockModel(model_id="us.amazon.nova-micro-v1:0",
                      region="us-east-1")  # ❌ hardcoded
 
 # ANTI-PATTERN: silent default for required config
@@ -507,9 +507,9 @@ User input (terminal)
 # Provider: "bedrock" (Amazon Bedrock) or "gemini" (Google Gemini)
 MODEL_PROVIDER=bedrock
 
-# Model ID — Bedrock: "anthropic.claude-3-sonnet-20240229-v1:0"
+# Model ID — Bedrock: "us.amazon.nova-micro-v1:0"
 #           — Gemini: "gemini-2.0-flash"
-MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+MODEL_ID=us.amazon.nova-micro-v1:0
 
 # --- AWS Configuration (required for Bedrock and AgentCore deployment) ---
 AWS_REGION=us-east-1

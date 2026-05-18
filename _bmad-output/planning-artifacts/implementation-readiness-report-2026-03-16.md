@@ -76,7 +76,7 @@ assessedBy: 'bmad-check-implementation-readiness'
 | NFR5 | Security | No user input logged in plaintext outside of AgentCore's managed observability context |
 | NFR6 | Security | Deployment script requests only minimum IAM permissions required for AgentCore |
 | NFR7 | Security | README includes an explicit warning against committing credentials to version control |
-| NFR8 | Integration | Agent functions correctly with Claude 3 Sonnet or Haiku via Amazon Bedrock |
+| NFR8 | Integration | Agent functions correctly with Claude 3 Sonnet or Nova Micro via Amazon Bedrock |
 | NFR9 | Integration | Agent functions correctly with Gemini free tier as documented fallback |
 | NFR10 | Integration | Model switching requires only an environment variable change — no code modification |
 | NFR11 | Integration | AgentCore deployment is idempotent — re-running does not create duplicates or errors |

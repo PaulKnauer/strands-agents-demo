@@ -114,7 +114,7 @@ So that I can prove the production path works and demonstrate managed observabil
 ### Runtime 500 Verification Findings
 
 - [x] [Review][Patch] AgentCore runtime returns generic 500 when Bedrock rejects the configured model because `_run_agent()` exceptions are uncaught [deploy/app.py:132]
-- [x] [Review][Patch] Default/docs still use Anthropic Claude model access even though the deployment path must move to a non-Anthropic model [README.md:51]
+- [x] [Review][Patch] Default/docs still used a legacy Bedrock model access path even though the deployment path needed to move to Amazon Nova Micro [README.md:51]
 - [x] [Review][Patch] Execution role policy only supports foundation-model ARNs, not current Bedrock inference profile IDs [deploy/deploy.py:142]
 - [x] [Review][Patch] Nova Lite calls `get_today_date` but returns incorrect manual arithmetic and misses the default verification performance budget [deploy/app.py:74]
 
@@ -187,7 +187,7 @@ None — implementation was straightforward brownfield hardening with no unexpec
 - Code review fixes: aligned verifier and deployed runtime date basis to UTC, rejected substring age false positives, restored credentials/IAM guidance on runtime lookup failures, and validated timeout/performance-budget env vars before use.
 - AWS failure review fixes: changed deploy packaging to ARM64-compatible `manylinux2014_aarch64` wheels, made deploy waiters surface `CREATE_FAILED` failure reasons, made verifier fail before invocation when runtime status is not `READY`, and documented pre-startup artifact architecture failures.
 - Final idempotency review fixes: verifier now tolerates UTC date rollover during invocation, waits briefly through transient runtime statuses, requires expected-age matches to appear in day-related context, skips malformed oversized numeric tokens, and prints the full invoke troubleshooting checklist for every invoke `ClientError`.
-- Runtime 500 review fixes: direct Bedrock Converse reproduction showed `anthropic.claude-3-haiku-20240307-v1:0` is denied in the current account, and project direction is to avoid Anthropic models. Verified `us.amazon.nova-micro-v1:0` supports Converse tool use with lower latency than Nova Lite, updated defaults/docs to Amazon Nova Micro, added inference-profile IAM resources for deploy/create-role, and made deployed app Bedrock errors return actionable strings instead of uncaught AgentCore 500s.
+- Runtime 500 review fixes: direct Bedrock Converse reproduction showed the previous configured model was denied in the current account, and project direction is to use Amazon Nova Micro. Verified `us.amazon.nova-micro-v1:0` supports Converse tool use with lower latency than Nova Lite, updated defaults/docs to Amazon Nova Micro, added inference-profile IAM resources for deploy/create-role, and made deployed app Bedrock errors return actionable strings instead of uncaught AgentCore 500s.
 - Nova arithmetic fix: deployed runtime now still prompts the model to call `get_today_date`, then computes supported DOB age-in-days deterministically with `datetime.date` before a second model turn can produce slow or incorrect hand arithmetic. Unit coverage locks `1990-03-14` to `2026-05-10` as `13,206` days.
 - README Step 3 updated with exact expected output shape including `Expected age`, `Result: PASS` line, and perf budget note.
 - README Step 4 replaced with 4-step numbered observability checklist covering AgentCore console, trace content, CloudWatch Transaction Search, and explicit no-custom-logging note.

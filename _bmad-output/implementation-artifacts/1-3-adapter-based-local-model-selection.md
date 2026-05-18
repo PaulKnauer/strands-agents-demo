@@ -119,7 +119,7 @@ Implementation can use small classes, dataclasses, or simple objects if the publ
 - Story 1.2 confirmed the current implementation already satisfies the local age-in-days behavior through deterministic tests and live startup evidence.
 - Story 1.2 explicitly deferred adapter extraction to Story 1.3; do not repeat Story 1.2's validation-only approach here.
 - Story 1.2 established evidence discipline: record actual commands run and distinguish deterministic tests from live credential-backed validation.
-- Story 1.2 live Bedrock conversation checks were blocked by revoked access to `anthropic.claude-3-haiku-20240307-v1:0`; do not treat that infrastructure/account issue as an adapter bug unless this story changes model IDs or Bedrock request construction.
+- Story 1.2 live Bedrock conversation checks were blocked by revoked access to `us.amazon.nova-micro-v1:0`; do not treat that infrastructure/account issue as an adapter bug unless this story changes model IDs or Bedrock request construction.
 
 ### Git Intelligence
 

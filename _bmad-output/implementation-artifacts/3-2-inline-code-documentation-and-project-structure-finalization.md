@@ -39,8 +39,8 @@ So that I can understand the entire project within 5 minutes and confidently for
   - [x] Run `black deploy/deploy.py --check` — must pass clean
 
 - [x] Task 3: Fix wrong default model ID in `deploy/app.py` (housekeeping, not an AC but a correctness issue)
-  - [x] Line: `model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")`
-  - [x] Change default to `anthropic.claude-3-haiku-20240307-v1:0` — matches confirmed working model and `.env.example`
+  - [x] Line: `model_id = os.environ.get("MODEL_ID", "us.amazon.nova-micro-v1:0")`
+  - [x] Change default to `us.amazon.nova-micro-v1:0` — matches confirmed working model and `.env.example`
   - [x] Also note: this `os.environ.get()` with a fallback contradicts the architecture's fail-fast principle for required vars; add a comment explaining the deliberate exception — in cloud context MODEL_ID is always injected by deploy.py, so the default only fires in misconfigured test scenarios
   - [x] Run `black deploy/app.py --check` — must pass clean
 
@@ -110,13 +110,13 @@ if not user_input:
 `deploy/app.py:59`:
 ```python
 # CURRENT (wrong — sonnet is not available on standard accounts):
-model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+model_id = os.environ.get("MODEL_ID", "us.amazon.nova-micro-v1:0")
 
-# CORRECT — haiku confirmed working (Story 2.2 debug log):
+# CORRECT — Nova Micro confirmed working (Story 2.2 debug log):
 # MODEL_ID is always set by deploy.py's environmentVariables injection — the
-# default here only fires in local test runs without .env, so we use haiku
+# default here only fires in local test runs without .env, so we use Nova Micro
 # (confirmed available on standard accounts without Marketplace subscription)
-model_id = os.environ.get("MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+model_id = os.environ.get("MODEL_ID", "us.amazon.nova-micro-v1:0")
 ```
 
 This is NOT covered by the ACs but is a correctness fix that prevents a confusing silent failure if MODEL_ID is ever missing in the runtime environment.
@@ -163,7 +163,7 @@ claude-sonnet-4-6
 ### Completion Notes List
 
 - Added 3 inline comments to `agent.py`: fail-fast `os.environ[]` rationale, REPL exit alias rationale, empty input skip rationale.
-- Fixed pre-existing bug in `deploy/app.py` line 59: wrong default model ID changed from `claude-3-sonnet-20240229-v1:0` to `claude-3-haiku-20240307-v1:0`; added comment explaining the deliberate `.get()` exception.
+- Fixed pre-existing bug in `deploy/app.py` line 59: wrong default model ID changed from `us.amazon.nova-micro-v1:0` to `us.amazon.nova-micro-v1:0`; added comment explaining the deliberate `.get()` exception.
 - Audited `deploy/deploy.py` — all required "why" comments already present, no changes needed.
 - `black --check` passes clean on all three files.
 - All 43 tests pass.

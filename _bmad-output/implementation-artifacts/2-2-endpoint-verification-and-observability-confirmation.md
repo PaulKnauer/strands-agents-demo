@@ -179,7 +179,7 @@ _none — verify.py created cleanly; black reformatted one line length on first 
 - **Python cache files**: zip included `__pycache__`/`.pyc` from Python 3.14 local env → `UPDATE_FAILED`. Fixed by excluding `__pycache__` and `.pyc` files, and recreating venv with Python 3.12.
 - **host binding**: `BedrockAgentCoreApp.run()` defaults to `127.0.0.1` outside Docker — AgentCore health check unreachable → 30s init timeout. Fixed with `app.run(host="0.0.0.0")` in `app.py`.
 - **boto3 not pre-installed**: Excluding boto3/botocore from bundle caused `ImportError` on startup → 500. Fixed by bundling all deps (no exclusions).
-- **Model ID deprecated**: `anthropic.claude-3-sonnet-20240229-v1:0` requires AWS Marketplace subscription not active on this account → 500. Fixed by switching to `anthropic.claude-3-haiku-20240307-v1:0`.
+- **Model ID deprecated**: `us.amazon.nova-micro-v1:0` requires AWS Marketplace subscription not active on this account → 500. Fixed by switching to `us.amazon.nova-micro-v1:0`.
 
 ### File List
 
@@ -187,5 +187,5 @@ _none — verify.py created cleanly; black reformatted one line length on first 
 - `deploy/app.py` (updated — `app.run(host="0.0.0.0")`)
 - `deploy/deploy.py` (updated — pre-bundled deps, aarch64 Linux wheels, no .pyc)
 - `Makefile` (updated)
-- `.env` (updated — MODEL_ID → claude-3-haiku)
-- `.env.example` (updated — MODEL_ID → claude-3-haiku)
+- `.env` (updated — MODEL_ID → claude-3-Nova Micro)
+- `.env.example` (updated — MODEL_ID → claude-3-Nova Micro)

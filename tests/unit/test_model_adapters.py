@@ -256,7 +256,7 @@ class TestCapabilityRegistry:
         from model_adapters import get_model_capabilities
 
         assert get_model_capabilities("openai") is None
-        assert get_model_capabilities("anthropic") is None
+        assert get_model_capabilities("mistral") is None
 
     def test_registry_entries_are_immutable(self):
         from model_adapters import get_model_capabilities

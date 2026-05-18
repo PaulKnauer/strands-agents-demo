@@ -32,7 +32,7 @@ So that I can follow it alone and reach a working, observable production agent.
 
 - [x] Task 2: Write the Prerequisites section (AC: #2)
   - [x]Python 3.11+ (with install link)
-  - [x]AWS account with Bedrock access enabled for `anthropic.claude-3-haiku-20240307-v1:0` in `us-east-1`
+  - [x]AWS account with Bedrock access enabled for `us.amazon.nova-micro-v1:0` in `us-east-1`
   - [x]AWS CLI configured (`aws configure`) OR `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` env vars
   - [x]For AgentCore deployment: IAM permissions listed (bedrock-agentcore-control:*, s3:*, iam:CreateRole, iam:PutRolePolicy, sts:GetCallerIdentity)
   - [x]Optional: Google Gemini API key (for Gemini fallback path only)
@@ -67,7 +67,7 @@ So that I can follow it alone and reach a working, observable production agent.
   - [x]`AccessDeniedException` / missing IAM permissions — link to bedrock-agentcore devguide
   - [x]Wrong AWS region — AgentCore only available in select regions
   - [x]`KeyError: MODEL_PROVIDER` or similar — missing `.env` or vars not set
-  - [x]Model access not enabled in Bedrock — how to enable `anthropic.claude-3-haiku-20240307-v1:0`
+  - [x]Model access not enabled in Bedrock — how to enable `us.amazon.nova-micro-v1:0`
   - [x]`venv/bin/python: No such file or directory` — reminder to create and activate venv first
   - [x]Agent deployed but verify fails — check runtime status in AgentCore console
 
@@ -89,12 +89,12 @@ These are the verified working values from Story 2.2 implementation:
 
 ```bash
 MODEL_PROVIDER=bedrock
-MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0   # NOT claude-3-sonnet — haiku is confirmed working
+MODEL_ID=us.amazon.nova-micro-v1:0   # Nova Micro is the configured Bedrock default
 AWS_REGION=us-east-1
 AGENT_NAME=age-in-days-demo
 ```
 
-**Important:** Earlier planning artifacts reference `anthropic.claude-3-sonnet-20240229-v1:0` but this model requires AWS Marketplace subscription. The working model is haiku. Use haiku in all README examples. See `.env.example` for the canonical values.
+**Important:** Earlier planning artifacts reference `us.amazon.nova-micro-v1:0` but this model requires AWS Marketplace subscription. The working model is Nova Micro. Use Nova Micro in all README examples. See `.env.example` for the canonical values.
 
 ### Platform Architecture Note
 
@@ -162,8 +162,8 @@ In AgentCore (cloud), the same flow happens via `app.py` with the Bedrock Conver
 ### Previous Story Learnings
 
 From Story 2.2 debug log (critical for README accuracy):
-- `anthropic.claude-3-sonnet-20240229-v1:0` does NOT work on standard accounts — requires Marketplace subscription
-- `anthropic.claude-3-haiku-20240307-v1:0` is the confirmed working model
+- `us.amazon.nova-micro-v1:0` does NOT work on standard accounts — requires Marketplace subscription
+- `us.amazon.nova-micro-v1:0` is the confirmed working model
 - AgentCore runtime names forbid hyphens — `age-in-days-demo` → `age_in_days_demo` automatically
 - boto3 must be bundled in the deployment ZIP (it is NOT pre-installed in AgentCore PYTHON_3_12 despite documentation suggesting otherwise)
 - `host="0.0.0.0"` is required in `app.run()` — default 127.0.0.1 causes health check timeout
@@ -188,7 +188,7 @@ claude-sonnet-4-6
 - All 9 tasks and all subtasks completed in a single pass.
 - README covers all required AC sections: ToC, prerequisites, local setup, AgentCore deployment, project structure, how it works (ASCII data flow), make targets, troubleshooting (7 scenarios), contributing.
 - Credential warning (⚠️) present in Local Setup before `.env` editing step — satisfies NFR7 / AC #4.
-- Uses confirmed working model `anthropic.claude-3-haiku-20240307-v1:0` throughout (not sonnet).
+- Uses confirmed working model `us.amazon.nova-micro-v1:0` throughout (not sonnet).
 - Explains local/cloud split (`agent.py` vs `deploy/app.py`) with rationale — key developer insight.
 - All 43 existing tests pass; `make lint` clean; only `README.md` modified.
 

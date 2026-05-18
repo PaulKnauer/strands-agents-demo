@@ -4,6 +4,6 @@
     "githubOwner": "PaulKnauer",
     "githubRepo": "strands-agents-demo",
     "githubRef": "refs/heads/main",
-    "modelId": "anthropic.claude-3-haiku-20240307-v1:0"
+    "modelId": "us.amazon.nova-micro-v1:0"
   }
 }

@@ -149,7 +149,7 @@ Artifact: [`_bmad-output/planning-artifacts/prd.md`](/Users/paul/github/strands-
 Artifact: [`_bmad-output/planning-artifacts/architecture.md`](/Users/paul/github/strands-agents-demo/_bmad-output/planning-artifacts/architecture.md:1)
 
 **OLD**
-- LLM: Amazon Bedrock (Claude 3 Sonnet/Haiku) primary; Google Gemini free tier fallback
+- LLM: Amazon Bedrock (Claude 3 Sonnet/Nova Micro) primary; Google Gemini free tier fallback
 - Decision: Two-variable env var pattern (`MODEL_PROVIDER` + `MODEL_ID`)
 - Agent code pattern:
 

@@ -198,7 +198,7 @@ def _run_agent(prompt: str) -> str:
     """Run the agentic tool-calling loop via the Bedrock Converse API."""
     # MODEL_ID is always injected by deploy.py's environmentVariables; the default
     # only fires in misconfigured test scenarios. Use Amazon Nova Micro so the
-    # deployed path does not depend on Anthropic model access.
+    # deployed path does not depend on separate third-party model access.
     model_id = os.environ.get("MODEL_ID", DEFAULT_MODEL_ID)
     region = os.environ.get("AWS_REGION", "us-east-1")
     # Bedrock Guardrails are optional — only wired when GUARDRAIL_ID is configured.

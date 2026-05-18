@@ -65,7 +65,7 @@ Epic 4 added **multi-provider model expansion** — Bedrock-first staged support
   - `iam:CreateRole`, `iam:GetRole`, `iam:PutRolePolicy`
   - `sts:GetCallerIdentity`
 
-**Additional requirements for scheduled red-team CI:**
+**Additional requirements for manual red-team CI:**
 
 - Node.js 20+ for `npx aws-cdk`
 - AWS credentials with permission to deploy IAM resources via CDK
@@ -444,7 +444,7 @@ Deployed runtime verification (via `make verify`) applies only to `MODEL_PROVIDE
 ```bash
 make install        # Create venv and install dependencies
 make run            # Run the agent locally (python agent.py)
-make redteam-role   # Deploy GitHub Actions OIDC role for scheduled red-team CI
+make redteam-role   # Deploy GitHub Actions OIDC role for manual red-team CI
 make create-role    # Deploy the AgentCore runtime IAM role via CDK
 make transaction-search  # Enable CloudWatch Transaction Search for AgentCore traces
 make deploy         # Deploy to AgentCore (python deploy/deploy.py)
@@ -469,7 +469,7 @@ make format         # Auto-format all Python files with black
 
 Your IAM user is missing permissions. Check the [Prerequisites](#prerequisites) section for the required policy actions. See the [AgentCore permissions guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html).
 
-**Scheduled Redteam workflow fails with `Missing AWS_ROLE_TO_ASSUME secret`**
+**Manual Redteam workflow fails with `Missing AWS_ROLE_TO_ASSUME secret`**
 
 Deploy the GitHub Actions OIDC role and store its ARN in GitHub Secrets:
 
@@ -492,7 +492,7 @@ AgentCore is available in select regions. Confirm `AWS_REGION=us-east-1` in `.en
 
 `us.amazon.nova-micro-v1:0` must be enabled in your account. Go to AWS Console → Amazon Bedrock → Model access → find Amazon Nova Micro → Request access.
 
-If you see `This Model is marked by provider as Legacy`, your `.env` still points at an older Anthropic Claude model. Update `MODEL_ID` to the Amazon Nova Micro inference profile above, then re-run `make deploy` so AgentCore receives the new environment variable and IAM policy.
+If you see `This Model is marked by provider as Legacy`, update `MODEL_ID` to the Amazon Nova Micro inference profile above, then re-run `make deploy` so AgentCore receives the new environment variable and IAM policy.
 
 **`venv/bin/python: No such file or directory`**
 

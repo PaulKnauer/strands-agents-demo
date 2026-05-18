@@ -214,7 +214,9 @@ class TestRunAgentGuardrails:
         mock_bedrock.converse.return_value = _end_turn("You are 1000 days old.")
 
         with patch.dict(
-            os.environ, {"MODEL_ID": "haiku", "AWS_REGION": "us-east-1"}, clear=True
+            os.environ,
+            {"MODEL_ID": "us.amazon.nova-micro-v1:0", "AWS_REGION": "us-east-1"},
+            clear=True,
         ):
             _run_agent("born 1 Jan 2020")
 

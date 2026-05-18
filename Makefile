@@ -25,7 +25,7 @@ help:
 	@echo ""
 	@echo "  Deployment"
 	@echo "    make guardrail    Create/update Bedrock Guardrail stack and print outputs"
-	@echo "    make redteam-role Deploy GitHub Actions OIDC role for scheduled red-team CI"
+	@echo "    make redteam-role Deploy GitHub Actions OIDC role for manual red-team CI"
 	@echo "    make transaction-search Enable CloudWatch Transaction Search for AgentCore observability"
 	@echo "    make create-role  Deploy AgentCore runtime IAM role via CDK"
 	@echo "    make deploy       Deploy agent to AWS AgentCore"

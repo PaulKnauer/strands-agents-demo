@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 ENV = {
     "AWS_REGION": "us-east-1",
     "AGENT_NAME": "test-agent",
-    "MODEL_ID": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "MODEL_ID": "us.amazon.nova-micro-v1:0",
 }
 
 

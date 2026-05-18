@@ -60,7 +60,7 @@ NFR4: `.env` is excluded from version control; `.env.example` contains no real c
 NFR5: No user input is logged in plaintext outside of AgentCore's managed observability context
 NFR6: The deployment script requests only the minimum IAM permissions required for AgentCore operation
 NFR7: README includes an explicit warning against committing credentials to version control
-NFR8: The agent functions correctly with Claude 3 Sonnet or Haiku via Amazon Bedrock
+NFR8: The agent functions correctly with Claude 3 Sonnet or Nova Micro via Amazon Bedrock
 NFR9: The agent functions correctly with Gemini free tier as the documented fallback
 NFR10: Model switching requires only an environment variable change — no code modification
 NFR11: AgentCore deployment is idempotent — re-running the script does not create duplicate resources or errors

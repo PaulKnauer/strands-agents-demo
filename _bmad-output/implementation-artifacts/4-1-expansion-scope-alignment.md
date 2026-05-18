@@ -163,7 +163,7 @@ Required change:
 Current state:
 
 - PRD and architecture already describe Bedrock as primary, Gemini as initial local support, staged expansion toward Gemma/Moonshot/Llama/Qwen/DeepSeek, and optional direct-provider/LiteLLM paths.
-- Architecture still contains older examples using an Anthropic Claude model ID in some snippets. Do not change historical examples unless they are actively misleading in current setup docs.
+- Architecture still contains older examples using legacy Bedrock model IDs in some snippets. Do not change historical examples unless they are actively misleading in current setup docs.
 
 Required change:
 

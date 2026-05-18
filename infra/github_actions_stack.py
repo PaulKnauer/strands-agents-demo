@@ -1,4 +1,4 @@
-"""GitHub Actions OIDC infrastructure for scheduled red-team scans."""
+"""GitHub Actions OIDC infrastructure for manual red-team scans."""
 
 from aws_cdk import CfnOutput, Stack
 from aws_cdk import aws_iam as iam

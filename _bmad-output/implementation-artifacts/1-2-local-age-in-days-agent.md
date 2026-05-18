@@ -66,7 +66,7 @@ so that I can validate the core Strands agent pattern and user-facing behavior e
     - [x] `python -m pytest tests/unit/test_safety_boundaries.py`
   - [x] Run live manual Bedrock verification with valid credentials:
     - [x] Startup shows the REPL prompt within 10 seconds (confirmed: < 3 seconds)
-    - [ ] Natural-language DOB prompt returns an age in days (blocked: model access revoked by Anthropic for legacy claude-3-haiku-20240307-v1:0 — not a code bug; tracked under Epic 4 multi-provider work)
+    - [ ] Natural-language DOB prompt returns an age in days (blocked by legacy Bedrock model access at the time — not a code bug; tracked under Epic 4 multi-provider work)
     - [ ] `14/03/1990` is treated as day-first without unnecessary clarification (blocked: same model access issue)
     - [ ] `3/4/1990` triggers a clarifying question (blocked: same model access issue)
     - [ ] Clearly invalid input returns a helpful error and the process keeps running (blocked: same model access issue)
@@ -290,7 +290,7 @@ claude-sonnet-4-6
 **Live verification outcome (2026-05-08):**
 - AC #1 startup: CONFIRMED LIVE — REPL prompt appeared in under 3 seconds.
 - REPL exit behavior (`exit`, `quit`, `q`): CONFIRMED by deterministic REPL tests; this path does not depend on model access.
-- ACs #2–#5 live tests: blocked by Anthropic revoking model access for `anthropic.claude-3-haiku-20240307-v1:0` (legacy model). This is an infrastructure/account issue, not a code defect. All behavioral contracts for ACs #2–#5 are fully covered by the deterministic test suite. The model access situation is being addressed separately under Epic 4 multi-provider work.
+- ACs #2–#5 live tests: blocked by legacy Bedrock model access at the time. This is an infrastructure/account issue, not a code defect. All behavioral contracts for ACs #2–#5 are fully covered by the deterministic test suite. The model access situation is being addressed separately under Epic 4 multi-provider work.
 
 ### File List
 

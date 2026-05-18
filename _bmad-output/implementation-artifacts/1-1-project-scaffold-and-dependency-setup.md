@@ -87,9 +87,9 @@ The architecture specifies the complete variable set with exact groupings:
 # Provider: "bedrock" (Amazon Bedrock) or "gemini" (Google Gemini)
 MODEL_PROVIDER=bedrock
 
-# Model ID — Bedrock: "anthropic.claude-3-sonnet-20240229-v1:0"
+# Model ID — Bedrock: "us.amazon.nova-micro-v1:0"
 #           — Gemini: "gemini-2.0-flash"
-MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+MODEL_ID=us.amazon.nova-micro-v1:0
 
 # --- AWS Configuration (required for Bedrock and AgentCore deployment) ---
 AWS_REGION=us-east-1

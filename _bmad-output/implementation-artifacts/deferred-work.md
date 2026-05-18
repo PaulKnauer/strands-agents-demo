@@ -25,7 +25,7 @@
 
 ## Deferred from: code review of 4-5-expansion-documentation-and-verification (2026-05-15)
 
-- MOONSHOT_API_KEY validation is moonshot-prefix-only; other LiteLLM provider prefixes (openai/, anthropic/) pass `__init__` without credential check and fail later at runtime with no guidance [model_adapters.py:222]. Deferred — acceptable for exploratory local-only path with no CI requirement.
+- MOONSHOT_API_KEY validation is moonshot-prefix-only; other LiteLLM provider prefixes pass `__init__` without credential check and fail later at runtime with no guidance [model_adapters.py:222]. Deferred — acceptable for exploratory local-only path with no CI requirement.
 - `self._client_args or None` silently converts `{}` to `None`; works correctly today but fragile if future code stores any falsy-truthy value in `_client_args` [model_adapters.py:230]. Deferred — no current breakage.
 - `"local" not in cap.runtimes` guard in `create_local_model_adapter` is dead code given current registry invariants; all enabled entries have `"local"` [model_adapters.py:278]. Deferred — defensive programming that protects future entries.
 - `test_litellm_rejection_occurs_before_bedrock_call` in `test_app.py` duplicates the `assert_not_called` assertion already covered by `test_litellm_provider_rejected_by_deployed_runtime` [tests/unit/test_app.py:398]. Deferred — harmless redundancy.

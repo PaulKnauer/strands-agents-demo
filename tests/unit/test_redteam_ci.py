@@ -1,4 +1,4 @@
-"""Static tests for scheduled red-team CI infrastructure."""
+"""Static tests for manual red-team CI infrastructure."""
 
 from pathlib import Path
 
@@ -37,6 +37,14 @@ class TestRedteamWorkflowCredentials:
         workflow = self._workflow()
         assert workflow["permissions"]["contents"] == "read"
         assert workflow["permissions"]["id-token"] == "write"
+
+    def test_workflow_is_manual_dispatch_only(self):
+        workflow = self._workflow()
+        triggers = workflow[True]
+        assert "workflow_dispatch" in triggers
+        assert "schedule" not in triggers
+        assert "push" not in triggers
+        assert "pull_request" not in triggers
 
     def test_workflow_uses_configure_aws_credentials(self):
         content = self._content()

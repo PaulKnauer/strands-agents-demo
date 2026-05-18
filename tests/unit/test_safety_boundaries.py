@@ -207,10 +207,10 @@ class TestPromptfooConfig:
         )
 
     def test_promptfoo_config_avoids_removed_prompt_injection_identifiers(self):
-        """Promptfoo config must avoid removed prompt-injection ids that break scheduled CI.
+        """Promptfoo config must avoid removed prompt-injection ids that break manual CI.
 
         Promptfoo 0.121.2 rejects the legacy `prompt-injection` plugin id. Keep
-        the config on current identifiers so the scheduled red-team workflow
+        the config on current identifiers so the manual red-team workflow
         continues to run on GitHub-hosted runners.
         """
         config = self._load_config()
