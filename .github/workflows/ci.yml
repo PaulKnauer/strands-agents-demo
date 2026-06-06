@@ -20,7 +20,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt -r infra/requirements.txt pytest black
+        run: pip install -r requirements.lock -r infra/requirements.lock pytest black
 
       - name: Lint
         run: make lint

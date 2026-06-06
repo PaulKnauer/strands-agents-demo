@@ -11,7 +11,8 @@ help:
 	@echo "  strands-agents-demo"
 	@echo ""
 	@echo "  Setup"
-	@echo "    make install      Create venv and install dependencies"
+	@echo "    make install      Create venv and install from lock file (reproducible)"
+	@echo "    make lock         Regenerate requirements.lock and infra/requirements.lock"
 	@echo "    make env          Copy .env.example → .env (skips if .env exists)"
 	@echo ""
 	@echo "  Development"
@@ -47,9 +48,24 @@ help:
 install:
 	python3 -m venv venv
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	$(PIP) install -r requirements.lock
 	@echo ""
 	@echo "  ✅ Dependencies installed. Run 'make env' if you haven't set up .env yet."
+
+.PHONY: lock
+lock:
+	python3 -m venv venv-lock-tmp
+	venv-lock-tmp/bin/pip install --upgrade pip --quiet
+	venv-lock-tmp/bin/pip install -r requirements.txt --quiet
+	venv-lock-tmp/bin/pip freeze > requirements.lock
+	rm -rf venv-lock-tmp
+	python3 -m venv venv-lock-tmp
+	venv-lock-tmp/bin/pip install --upgrade pip --quiet
+	venv-lock-tmp/bin/pip install -r infra/requirements.txt --quiet
+	venv-lock-tmp/bin/pip freeze > infra/requirements.lock
+	rm -rf venv-lock-tmp
+	@echo ""
+	@echo "  ✅ Lock files updated: requirements.lock and infra/requirements.lock"
 
 .PHONY: env
 env:
@@ -98,32 +114,32 @@ guardrail:
 
 .PHONY: redteam-role
 redteam-role:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 deploy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --require-approval never
 
 .PHONY: transaction-search
 transaction-search:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 deploy StrandsDemoTransactionSearchStack --app "$(PYTHON) infra/app.py" --require-approval never
 
 .PHONY: teardown-redteam-role
 teardown-redteam-role:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 destroy StrandsDemoGithubActionsStack --app "$(PYTHON) infra/app.py" --force
 
 .PHONY: teardown-transaction-search
 teardown-transaction-search:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 destroy StrandsDemoTransactionSearchStack --app "$(PYTHON) infra/app.py" --force
 
 .PHONY: create-role
 create-role:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 deploy StrandsDemoAgentCoreRuntimeRoleStack --app "$(PYTHON) infra/app.py" --require-approval never
 
 .PHONY: teardown-role
 teardown-role:
-	$(PIP) install -r infra/requirements.txt
+	$(PIP) install -r infra/requirements.lock
 	npx --yes aws-cdk@2 destroy StrandsDemoAgentCoreRuntimeRoleStack --app "$(PYTHON) infra/app.py" --force
 
 .PHONY: deploy
