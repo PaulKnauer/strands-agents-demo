@@ -282,6 +282,57 @@ This project includes a complete [NIST AI Risk Management Framework (AI RMF 1.0)
 | **MANAGE** | 4.1 | [`docs/ai-system-card.md`](docs/ai-system-card.md) — human oversight mechanisms | — |
 | **MEASURE** | 2.4, 2.5 (automated) | [`tests/unit/test_safety_boundaries.py`](tests/unit/test_safety_boundaries.py), [`compliance/promptfoo-redteam.yaml`](compliance/promptfoo-redteam.yaml) — red-team CI | `make redteam` |
 
+### Why red-team CI and Bedrock Guardrails are manually triggered
+
+Two core compliance capabilities — the **promptfoo red-team probe suite** and **Bedrock Guardrails** — are intentionally set to manual activation on a fresh clone or fork. Here is why, and what to do if you want them active permanently.
+
+#### Red-team CI: `workflow_dispatch` only
+
+The [`redteam.yml`](.github/workflows/redteam.yml) workflow runs **only when manually triggered** from the GitHub Actions UI (`workflow_dispatch`). It does **not** run on `push`, `pull_request`, or a `schedule` cron.
+
+**Why manual?**
+
+| Reason | Detail |
+|---|---|
+| **AWS OIDC infrastructure** | The workflow assumes a short-lived AWS role via GitHub OIDC (`make redteam-role`). A fresh fork has no such role configured — the workflow would fail on every push or schedule tick. |
+| **Bedrock model access** | The promptfoo probes hit `us.amazon.nova-micro-v1:0` via Bedrock directly. The forking account may not have this model enabled, and the failure mode (empty response) is silent. |
+| **LLM API costs** | The full suite runs 350+ adversarial probes per execution (25 per plugin × 7 plugins, doubled by jailbreak templates). Automatic scheduling was intentionally removed so a fork does not start burning funds without awareness. |
+
+**If you fork this repo and want red-team CI automated**, the implementation plan is:
+
+1. Deploy the GitHub Actions OIDC role: `make redteam-role`
+2. Store the output `GitHubActionsRoleArn` as the repository secret `AWS_ROLE_TO_ASSUME`
+3. Store your `GUARDRAIL_ID` and `GUARDRAIL_VERSION` as repo secrets (see [Bedrock Guardrails](#bedrock-guardrails-manual-deployment) below)
+4. Add `schedule: cron: '0 6 * * 1'` (weekly Monday 06:00 UTC) and/or `push`/`pull_request` triggers to the top of `.github/workflows/redteam.yml`
+
+#### Bedrock Guardrails: manual deployment
+
+The guardrail policy definition is committed in [`deploy/guardrail.yaml`](deploy/guardrail.yaml), but it is a CloudFormation template that must be intentionally deployed to your AWS account. Until deployed, the agent runs **without** Bedrock Guardrails enforcement.
+
+**Why manual?**
+
+| Reason | Detail |
+|---|---|
+| **AWS account dependency** | Guardrails are an AWS-maintained service (Bedrock). There is no local/emulated equivalent. A fork in a non-AWS environment (or an account without Bedrock model access) cannot deploy the stack. |
+| **`GUARDRAIL_ID` env var** | The deployed guardrail's ID must be set as an environment variable (`GUARDRAIL_ID`, `GUARDRAIL_VERSION`). The agent silently skips guardrail enforcement when these are absent — no crash, just unguarded LLM calls. |
+| **Dual effect** | Guardrails apply to both the local REPL (`agent.py` via Strands SDK BedrockAdapter) and the AgentCore runtime (`deploy/app.py` via Bedrock Converse API). Deploying the stack but forgetting to set the env var in both places gives false confidence. |
+
+**If you fork this repo and want guardrails enforced automatically**, the implementation plan is:
+
+1. Deploy the guardrail stack: `make guardrail` (or `aws cloudformation deploy ...`)
+2. Copy the output `GuardrailId` and `GuardrailVersion` to your `.env` file and repository secrets
+3. Verify enforcement by running the local REPL with a blocked prompt (e.g., a hate-speech test)
+4. **Optional — script it:** Add a GitHub Actions step that deploys the guardrail stack as part of your CI bootstrap workflow, so every fork or environment gets a guardrail without manual `make guardrail`
+
+#### Summary for fork operators
+
+| Capability | On fresh fork | To make permanent |
+|---|---|---|
+| Red-team CI | Manual only — no AWS OIDC, no LLM budget | Deploy OIDC role + add schedule trigger |
+| Guardrails | Not deployed — no guardrail block rate, no PII redaction | `make guardrail` + set env vars |
+
+Both are documented as NIST AI RMF evidence paths in the table above. **Turning them back on is the right thing for production use** — these instructions make it safe to do so deliberately, and dangerous to do accidentally.
+
 **Key compliance files:**
 
 - `docs/` — three governance documents (system card, risk register, governance charter)
