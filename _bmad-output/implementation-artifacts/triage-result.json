@@ -1,0 +1,150 @@
+{
+  "workflow": "deferred-sweep-triage",
+  "open_ids": [
+    "2026-05-09/1",
+    "2026-05-10/1",
+    "2026-05-13/1",
+    "2026-05-14/1",
+    "2026-05-14/2",
+    "2026-05-14/3",
+    "2026-05-14/4",
+    "2026-05-14/5",
+    "2026-05-14/6",
+    "2026-05-14/7",
+    "2026-05-14/8",
+    "2026-05-14/9",
+    "2026-05-14/10",
+    "2026-05-14/11",
+    "2026-05-14/12",
+    "2026-05-15/1",
+    "2026-05-15/2",
+    "2026-05-15/3",
+    "2026-05-15/4",
+    "2026-05-15/5",
+    "2026-05-15/6",
+    "2026-05-15/7",
+    "2026-05-15/8",
+    "2026-05-15/9",
+    "2026-05-15/10",
+    "2026-05-15/11",
+    "2026-05-15/12"
+  ],
+  "already_resolved": [
+    {
+      "id": "2026-05-09/1",
+      "evidence": "deploy/create_role.py rewritten to deprecation stub (commit 2456bb9, 2026-05-12). IAM role management moved to CDK stacks in infra/agentcore_runtime_role_stack.py. No raw stack traces possible."
+    },
+    {
+      "id": "2026-05-14/1",
+      "evidence": "model_adapters.py:290-325 now uses _ADAPTER_MAP dict ({\"gemini\": GeminiAdapter, \"litellm\": LiteLLMAdapter}) with registry-backed BedrockAdapter fallback. No hardcoded if/elif chains."
+    },
+    {
+      "id": "2026-05-14/3",
+      "evidence": "model_adapters.py:301-303 — empty string '' provider now produces clear error: 'Unknown MODEL_PROVIDER: ''' with supported list. No longer misleading."
+    }
+  ],
+  "bundles": [
+    {
+      "name": "negative-age-input-guard",
+      "dw_ids": ["2026-05-13/1"],
+      "intent": "Add a date-ordering guard to deploy/app.py:_format_age_response() to prevent negative age output when parsing future dates of birth. Guard at line 172 before (today - dob).days computation, returning or raising a clear error message. Also add the same guard to agent.py's equivalent path for dual-file parity."
+    },
+    {
+      "name": "model-adapter-type-validation",
+      "dw_ids": ["2026-05-14/2"],
+      "intent": "Constrain ModelCapabilities.runtimes from tuple[str, ...] to a typed Literal using the known allowed values ('local', 'deployed', 'planned'). Add a Pydantic-validated field or at minimum a runtime validation that catches invalid values at registry construction time instead of silently accepting any string."
+    },
+    {
+      "name": "model-adapter-registry-filters",
+      "dw_ids": ["2026-05-14/5", "2026-05-14/6", "2026-05-14/7", "2026-05-14/8"],
+      "intent": "Harden the model_adapters.py registry: (1) planned_model_families() should filter on runtimes=('planned',) in addition to enabled=False so the intent is semantically accurate. (2) Normalize case in provider lookup with .lower() so 'Bedrock' and 'bedrock' resolve identically. (3) Add __all__ to control public symbols. (4) Add a unit test that verifies the duplicate-key guard at line 166-167 actually fires on a malformed registry."
+    },
+    {
+      "name": "model-adapter-validation-fixes",
+      "dw_ids": ["2026-05-14/4", "2026-05-14/9", "2026-05-14/12"],
+      "intent": "Address three low-risk validation gaps in model_adapters.py: (1) Move supported_local_providers() out of ValueError f-strings to avoid double-fault risk on registry failure. (2) Broaden MOONSHOT_API_KEY validation beyond prefix-only check (verify expected key format). (3) Validate LITELLM_API_BASE path component (e.g. require /v1 suffix) so misconfigured URLs produce clear errors at init time rather than at runtime."
+    },
+    {
+      "name": "test-hygiene-cleanup",
+      "dw_ids": ["2026-05-14/10", "2026-05-14/11", "2026-05-15/1", "2026-05-15/2", "2026-05-15/3"],
+      "intent": "Clean up five test-quality issues in test_model_adapters.py and test_app.py: (1) Refactor copy-pasted planned-family rejection tests into @pytest.mark.parametrize. (2) Convert class-level mutable _env dict to fixture with factory. (3) Remove test_litellm_rejection_occurs_before_bedrock_call (subset of existing test). (4-5) Two deferred items from the 4-5 review batch: fix test fragility."
+    },
+    {
+      "name": "documentation-clarity-fixes",
+      "dw_ids": ["2026-05-10/1", "2026-05-15/4", "2026-05-15/6", "2026-05-15/7", "2026-05-15/11", "2026-05-15/12"],
+      "intent": "Fix documentation gaps and brittle test assertions: (1) Update the stale 3-1-comprehensive-readme.md artifact to match current ARM64 packaging convention. (2) Add concrete Bedrock model ID to deploy/verify.py Llama failure hint. (3) Decouple TestReadmeProviderRoadmap assertions from Markdown syntax by matching on content not formatting. (4-6) Remaining doc/structure nits from 4-5 review."
+    }
+  ],
+  "blocked": [],
+  "skip": [
+    {
+      "id": "2026-05-14/10",
+      "reason": "self._client_args or None pattern is intentionally tested (test line 542 asserts this behavior). {} → None conversion is by design, not a defect."
+    },
+    {
+      "id": "2026-05-14/11",
+      "reason": "\"local\" not in cap.runtimes guard at model_adapters.py:313-317 is a deliberate defensive guard protecting against future registry misconfiguration. Not dead code in the architectural sense."
+    },
+    {
+      "id": "2026-05-14/12",
+      "reason": "Gemini branch reached only after registry checks is by design — the registry validates existence and enablement first, then routes to the adapter map. Architectural intentional, not a bug."
+    },
+    {
+      "id": "2026-05-14/13",
+      "reason": "bedrock_first=False provider without adapter falls to safety ValueError. By-design guard, would only fire on registry misconfiguration."
+    },
+    {
+      "id": "2026-05-14/14",
+      "reason": "README matrix split is a presentation choice with all information present. Reviewer noted 'all information is present; restructuring would be significant churn.' Not a defect to fix automatically."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "2026-05-15/5",
+      "question": "Should the README model-support roadmap and verification tables be merged into a single consolidated matrix, or keep the current two-table structure?",
+      "context": "README.md lines 460-487: The roadmap table (stage/providers/status) and verification table (provider/level/notes) cover different dimensions with explanatory prose between them. Consolidating would reduce context switching but the original reviewer noted 'all information present; restructuring would be significant churn.'",
+      "options": [
+        {
+          "key": "1",
+          "label": "Merge into single matrix",
+          "effect": "build",
+          "intent": "Consolidate the roadmap and verification tables into one unified provider matrix with columns: Provider, Stage, Local Support, Deployed Support, Verification Level, Notes."
+        },
+        {
+          "key": "2",
+          "label": "Keep current structure, rename sections",
+          "effect": "build",
+          "intent": "Keep two tables but rename section headers for clarity and add cross-references so readers understand the relationship."
+        },
+        {
+          "key": "3",
+          "label": "Keep as-is",
+          "effect": "close",
+          "resolution": "All information is present and accurate. Restructuring is cosmetic."
+        }
+      ],
+      "recommendation": "2"
+    },
+    {
+      "id": "2026-05-15/8",
+      "question": "Should the test_litellm_rejection_occurs_before_bedrock_call test at test_app.py:408 be removed as a duplicate, or kept for documentation purposes?",
+      "context": "This test only asserts mock_client.assert_not_called() which is already asserted by test_litellm_provider_rejected_by_deployed_runtime at line 400. It adds zero unique coverage but documents the intent that pre-runtime rejection avoids Bedrock API calls.",
+      "options": [
+        {
+          "key": "1",
+          "label": "Remove duplicate test",
+          "effect": "build",
+          "intent": "Delete test_litellm_rejection_occurs_before_bedrock_call from test_app.py"
+        },
+        {
+          "key": "2",
+          "label": "Keep as documentation artifact",
+          "effect": "close",
+          "resolution": "No functional issue; the test is harmless and documents intent."
+        }
+      ],
+      "recommendation": "1"
+    }
+  ],
+  "escalations": []
+}
